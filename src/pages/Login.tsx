@@ -1,20 +1,69 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Store, Eye, EyeOff } from "lucide-react";
+import { Shield, Store, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 const Login = () => {
   const navigate = useNavigate();
-  const [role, setRole] = useState<"admin" | "manager" | null>(null);
+  const { role: urlRole } = useParams<{ role?: string }>();
+  const { login, user } = useAuth();
+  const { toast } = useToast();
+  
+  const [role, setRole] = useState<"admin" | "manager" | null>(
+    urlRole === "admin" || urlRole === "manager" ? urlRole : null
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Navigate to dashboard when user is logged in
+  useEffect(() => {
+    if (user && user.id) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate("/dashboard");
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (!email || !password) {
+        setError("Please enter your email and password");
+        setLoading(false);
+        return;
+      }
+
+      await login(email, password);
+      
+      toast({
+        title: "Success",
+        description: "Login successful",
+      });
+
+      // Immediately navigate after login succeeds
+      // The useEffect will also handle navigation when user state updates (as fallback)
+      setTimeout(() => {
+        navigate("/dashboard", { replace: true });
+      }, 300);
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.message || err?.message || "Login failed";
+      setError(errorMessage);
+      setLoading(false);
+      
+      toast({
+        title: "Login Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -43,7 +92,10 @@ const Login = () => {
           <div className="space-y-4 animate-fade-up" style={{ animationDelay: "0.1s" }}>
             <p className="text-center text-muted-foreground text-sm mb-6">Select your role to continue</p>
             <button
-              onClick={() => setRole("admin")}
+              onClick={() => {
+                setRole("admin");
+                navigate("/login/admin");
+              }}
               className="w-full glass-card p-5 flex items-center gap-4 hover:border-primary/50 hover:glow-primary transition-all duration-300 group cursor-pointer"
             >
               <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
@@ -55,7 +107,10 @@ const Login = () => {
               </div>
             </button>
             <button
-              onClick={() => setRole("manager")}
+              onClick={() => {
+                setRole("manager");
+                navigate("/login/manager");
+              }}
               className="w-full glass-card p-5 flex items-center gap-4 hover:border-gold/50 transition-all duration-300 group cursor-pointer"
             >
               <div className="w-12 h-12 rounded-lg bg-gold/10 flex items-center justify-center group-hover:bg-gold/20 transition-colors">
@@ -71,7 +126,11 @@ const Login = () => {
           <form onSubmit={handleLogin} className="space-y-5 animate-fade-up">
             <button
               type="button"
-              onClick={() => setRole(null)}
+              onClick={() => {
+                setRole(null);
+                setError(null);
+                navigate("/login");
+              }}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
             >
               ← Back to role selection
@@ -86,6 +145,13 @@ const Login = () => {
               <span className="text-sm text-foreground capitalize">{role} Login</span>
             </div>
 
+            {error && (
+              <div className="glass-card border-red-500/20 bg-red-500/5 p-3 flex items-gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-500">{error}</p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="email" className="text-muted-foreground text-sm">Email</Label>
               <Input
@@ -94,6 +160,7 @@ const Login = () => {
                 placeholder="you@jugaadnights.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
                 className="bg-secondary border-border focus:border-primary h-11"
               />
             </div>
@@ -107,24 +174,30 @@ const Login = () => {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
                   className="bg-secondary border-border focus:border-primary h-11 pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  disabled={loading}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-50"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            <Button type="submit" className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
-              Sign In
+            <Button 
+              type="submit" 
+              disabled={loading}
+              className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-medium disabled:opacity-50"
+            >
+              {loading ? "Signing In..." : "Sign In"}
             </Button>
 
             <p className="text-center text-xs text-muted-foreground">
-              Forgot password? Contact your administrator
+              Demo credentials: admin@jugaadnights.com / password123
             </p>
           </form>
         )}

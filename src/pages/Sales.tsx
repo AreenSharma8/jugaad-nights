@@ -1,38 +1,11 @@
 import { useState } from "react";
+import { Loader } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area
 } from "recharts";
-
-const dailyData = [
-  { date: "Feb 10", sales: 195000 }, { date: "Feb 11", sales: 210000 },
-  { date: "Feb 12", sales: 185000 }, { date: "Feb 13", sales: 240000 },
-  { date: "Feb 14", sales: 310000 }, { date: "Feb 15", sales: 275000 },
-  { date: "Feb 16", sales: 248000 }, { date: "Feb 17", sales: 260000 },
-];
-
-const onlineOffline = [
-  { name: "Online", value: 104000, color: "hsl(40, 70%, 55%)" },
-  { name: "Offline", value: 144000, color: "hsl(0, 65%, 45%)" },
-];
-
-const peakHours = [
-  { hour: "11AM", orders: 12 }, { hour: "12PM", orders: 38 }, { hour: "1PM", orders: 52 },
-  { hour: "2PM", orders: 35 }, { hour: "3PM", orders: 15 }, { hour: "4PM", orders: 8 },
-  { hour: "5PM", orders: 10 }, { hour: "6PM", orders: 18 }, { hour: "7PM", orders: 42 },
-  { hour: "8PM", orders: 65 }, { hour: "9PM", orders: 78 }, { hour: "10PM", orders: 55 },
-  { hour: "11PM", orders: 30 },
-];
-
-const itemSales = [
-  { name: "Butter Chicken", category: "Main Course", qty: 86, revenue: 34400, avgPrice: 400 },
-  { name: "Paneer Tikka", category: "Starters", qty: 72, revenue: 21600, avgPrice: 300 },
-  { name: "Biryani Special", category: "Main Course", qty: 68, revenue: 27200, avgPrice: 400 },
-  { name: "Dal Makhani", category: "Main Course", qty: 54, revenue: 13500, avgPrice: 250 },
-  { name: "Tandoori Platter", category: "Starters", qty: 48, revenue: 28800, avgPrice: 600 },
-  { name: "Gulab Jamun", category: "Dessert", qty: 42, revenue: 8400, avgPrice: 200 },
-  { name: "Naan Basket", category: "Breads", qty: 120, revenue: 12000, avgPrice: 100 },
-];
+import { useAuth } from "@/context/AuthContext";
+import { useOrders, useSalesTrends } from "@/hooks/useApi";
 
 const tt = {
   contentStyle: {
@@ -45,7 +18,62 @@ const tt = {
 };
 
 const Sales = () => {
+  const { user } = useAuth();
   const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
+
+  // Calculate date range based on period
+  const getDates = () => {
+    const today = new Date();
+    const startDate = new Date(today);
+    
+    if (period === "daily") {
+      startDate.setDate(today.getDate() - 1);
+    } else if (period === "weekly") {
+      startDate.setDate(today.getDate() - 7);
+    } else {
+      startDate.setMonth(today.getMonth() - 1);
+    }
+    
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: today.toISOString().split('T')[0],
+    };
+  };
+
+  const { startDate, endDate } = getDates();
+
+  // Fetch real sales data
+  const { data: orders, isLoading: ordersLoading } = useOrders(user?.outlet_id);
+  const { data: trends, isLoading: trendsLoading } = useSalesTrends(
+    user?.outlet_id || "",
+    startDate,
+    endDate
+  );
+
+  // Transform orders to itemSales format
+  const itemSalesMap = new Map();
+  orders?.forEach((order: any) => {
+    const key = order.item_name || "Unknown Item";
+    const existing = itemSalesMap.get(key) || { qty: 0, revenue: 0, price: 0 };
+    itemSalesMap.set(key, {
+      name: key,
+      category: order.category || "Other",
+      qty: existing.qty + (order.quantity || 0),
+      revenue: existing.revenue + (order.total_amount || 0),
+      avgPrice: order.unit_price || 0,
+    });
+  });
+
+  const itemSales = Array.from(itemSalesMap.values()).sort((a, b) => b.revenue - a.revenue);
+
+  // Default data structures
+  const dailyData = trends?.daily || [];
+  const peakHours = trends?.peak_hours || [];
+  
+  const onlineOffline = [
+    { name: "Online", value: trends?.online_sales || 0, color: "hsl(40, 70%, 55%)" },
+    { name: "Offline", value: trends?.offline_sales || 0, color: "hsl(0, 65%, 45%)" },
+  ].filter(d => d.value > 0);
 
   return (
     <div className="space-y-6">
@@ -68,6 +96,7 @@ const Sales = () => {
 
       <div className="grid lg:grid-cols-3 gap-4">
         {/* Sales Trend */}
+        {dailyData.length > 0 && (
         <div className="lg:col-span-2 glass-card p-5">
           <h3 className="font-display text-lg font-semibold text-foreground mb-4">Sales Summary</h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -86,8 +115,10 @@ const Sales = () => {
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        )}
 
         {/* Online vs Offline */}
+        {onlineOffline.length > 0 && (
         <div className="glass-card p-5">
           <h3 className="font-display text-lg font-semibold text-foreground mb-4">Online vs Offline</h3>
           <ResponsiveContainer width="100%" height={200}>
@@ -98,18 +129,12 @@ const Sales = () => {
               <Tooltip {...tt} formatter={(v: number) => [`₹${v.toLocaleString()}`, ""]} />
             </PieChart>
           </ResponsiveContainer>
-          <div className="flex justify-center gap-4 mt-2">
-            {onlineOffline.map((item) => (
-              <div key={item.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                {item.name}: ₹{(item.value / 1000).toFixed(0)}K
-              </div>
-            ))}
-          </div>
         </div>
+        )}
       </div>
 
       {/* Peak Hours */}
+      {peakHours.length > 0 && (
       <div className="glass-card p-5">
         <h3 className="font-display text-lg font-semibold text-foreground mb-4">Peak Hours</h3>
         <ResponsiveContainer width="100%" height={220}>
@@ -122,8 +147,10 @@ const Sales = () => {
           </BarChart>
         </ResponsiveContainer>
       </div>
+      )}
 
       {/* Item Table */}
+      {itemSales.length > 0 && (
       <div className="glass-card p-5 overflow-x-auto">
         <h3 className="font-display text-lg font-semibold text-foreground mb-4">Item-wise Sales</h3>
         <table className="w-full text-sm">
@@ -149,6 +176,7 @@ const Sales = () => {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 };

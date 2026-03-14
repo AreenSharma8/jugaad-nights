@@ -2,24 +2,9 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight } from "lucide-react";
-
-const dailyInflow = [
-  { date: "Feb 10", inflow: 195000, outflow: 85000 },
-  { date: "Feb 11", inflow: 210000, outflow: 92000 },
-  { date: "Feb 12", inflow: 185000, outflow: 78000 },
-  { date: "Feb 13", inflow: 240000, outflow: 105000 },
-  { date: "Feb 14", inflow: 310000, outflow: 120000 },
-  { date: "Feb 15", inflow: 275000, outflow: 95000 },
-  { date: "Feb 16", inflow: 248000, outflow: 88000 },
-  { date: "Feb 17", inflow: 260000, outflow: 92000 },
-];
-
-const outletProfit = [
-  { name: "Navrangpura", profit: 142000 },
-  { name: "Prahlad Nagar", profit: 178000 },
-  { name: "Sindhu Bhavan", profit: 118000 },
-];
+import { TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight, Loader } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { useCashFlow, useCashFlowSummary } from "@/hooks/useApi";
 
 const tt = {
   contentStyle: {
@@ -32,6 +17,22 @@ const tt = {
 };
 
 const Cashflow = () => {
+  const { user } = useAuth();
+  const { data: cashFlowData, isLoading } = useCashFlow(user?.outlet_id);
+  const { data: summaryData } = useCashFlowSummary(user?.outlet_id || "");
+
+  const dailyInflow = cashFlowData?.map((entry: any) => ({
+    date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    inflow: entry.inflow || 0,
+    outflow: entry.outflow || 0,
+  })) || [];
+
+  const summaryStats = summaryData || {
+    total_inflow: 0,
+    total_outflow: 0,
+    net_profit: 0,
+    avg_daily: 0,
+  };
   return (
     <div className="space-y-6">
       <h1 className="font-display text-2xl font-bold text-foreground">Cashflow Analytics</h1>
@@ -39,10 +40,10 @@ const Cashflow = () => {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { title: "Total Inflow", value: "₹19,23,000", change: "+14%", up: true, icon: ArrowUpRight },
-          { title: "Total Outflow", value: "₹7,55,000", change: "+8%", up: true, icon: ArrowDownRight },
-          { title: "Net Profit", value: "₹11,68,000", change: "+18%", up: true, icon: TrendingUp },
-          { title: "Avg Daily", value: "₹2,40,375", change: "-3%", up: false, icon: DollarSign },
+          { title: "Total Inflow", value: `₹${(summaryStats.total_inflow || 0).toLocaleString()}`, change: "+14%", up: true, icon: ArrowUpRight },
+          { title: "Total Outflow", value: `₹${(summaryStats.total_outflow || 0).toLocaleString()}`, change: "+8%", up: true, icon: ArrowDownRight },
+          { title: "Net Profit", value: `₹${(summaryStats.net_profit || 0).toLocaleString()}`, change: "+18%", up: true, icon: TrendingUp },
+          { title: "Avg Daily", value: `₹${(summaryStats.avg_daily || 0).toLocaleString()}`, change: "-3%", up: false, icon: DollarSign },
         ].map((card) => (
           <div key={card.title} className="glass-card p-4">
             <div className="flex items-center justify-between mb-2">
@@ -56,6 +57,7 @@ const Cashflow = () => {
       </div>
 
       {/* Inflow vs Outflow */}
+      {dailyInflow.length > 0 && (
       <div className="glass-card p-5">
         <h3 className="font-display text-lg font-semibold text-foreground mb-4">Revenue vs Expenses</h3>
         <ResponsiveContainer width="100%" height={320}>
@@ -79,19 +81,12 @@ const Cashflow = () => {
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      )}
 
-      {/* Outlet Profitability */}
+      {/* Outlet Profitability - Placeholder for single outlet */}
       <div className="glass-card p-5">
-        <h3 className="font-display text-lg font-semibold text-foreground mb-4">Outlet-wise Profitability</h3>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={outletProfit}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 22%)" />
-            <XAxis dataKey="name" tick={{ fill: "hsl(220, 10%, 55%)", fontSize: 12 }} axisLine={false} />
-            <YAxis tick={{ fill: "hsl(220, 10%, 55%)", fontSize: 12 }} axisLine={false} tickFormatter={(v) => `₹${v / 1000}K`} />
-            <Tooltip {...tt} formatter={(v: number) => [`₹${v.toLocaleString()}`, "Profit"]} />
-            <Bar dataKey="profit" fill="hsl(40, 70%, 55%)" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <h3 className="font-display text-lg font-semibold text-foreground mb-4">Cashflow Summary</h3>
+        <p className="text-sm text-muted-foreground">Daily cashflow data for {user?.outlet_name || 'your outlet'}</p>
       </div>
     </div>
   );
