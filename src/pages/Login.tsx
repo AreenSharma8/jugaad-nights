@@ -3,18 +3,83 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Store, Eye, EyeOff } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Shield, Store, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const Login = () => {
   const navigate = useNavigate();
-  const [role, setRole] = useState<"admin" | "manager" | null>(null);
+  const { toast } = useToast();
+  const { login, isLoading, error } = useAuth();
+
+  const [role, setRole] = useState<"admin" | "manager" | "staff" | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Map role to demo email
+  const getDemoEmail = () => {
+    switch (role) {
+      case "admin":
+        return "admin@jugaadnights.com";
+      case "manager":
+        return "manager@jugaadnights.com";
+      case "staff":
+        return "staff@jugaadnights.com";
+      default:
+        return "";
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate("/dashboard");
+
+    if (!email || !password) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter both email and password",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await login(email, password);
+      toast({
+        title: "Success",
+        description: "Logged in successfully!",
+      });
+      navigate("/dashboard");
+    } catch (err: any) {
+      toast({
+        title: "Login Failed",
+        description: err.message || "Invalid credentials",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDemoLogin = async (demoRole: "admin" | "manager" | "staff") => {
+    const demoEmail = demoRole === "admin" 
+      ? "admin@jugaadnights.com" 
+      : demoRole === "manager" 
+      ? "manager@jugaadnights.com" 
+      : "staff@jugaadnights.com";
+
+    try {
+      await login(demoEmail, "demo-password");
+      toast({
+        title: "Success",
+        description: "Logged in as demo user!",
+      });
+      navigate("/dashboard");
+    } catch (err: any) {
+      toast({
+        title: "Login Failed",
+        description: err.message || "Demo login failed",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -37,6 +102,16 @@ const Login = () => {
             Operations Hub
           </p>
         </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-6 glass-card border-red-500/50 bg-red-50/10 p-4 flex items-start gap-3 rounded-lg animate-fade-up">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
 
         {/* Role Selection */}
         {!role ? (
@@ -66,6 +141,18 @@ const Login = () => {
                 <p className="text-sm text-muted-foreground">Outlet operations & daily entries</p>
               </div>
             </button>
+            <button
+              onClick={() => setRole("staff")}
+              className="w-full glass-card p-5 flex items-center gap-4 hover:border-yellow-500/50 transition-all duration-300 group cursor-pointer"
+            >
+              <div className="w-12 h-12 rounded-lg bg-yellow-500/10 flex items-center justify-center group-hover:bg-yellow-500/20 transition-colors">
+                <Shield className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-foreground">Staff</p>
+                <p className="text-sm text-muted-foreground">Daily operations & order entry</p>
+              </div>
+            </button>
           </div>
         ) : (
           <form onSubmit={handleLogin} className="space-y-5 animate-fade-up">
@@ -73,6 +160,7 @@ const Login = () => {
               type="button"
               onClick={() => setRole(null)}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
+              disabled={isLoading}
             >
               ← Back to role selection
             </button>
@@ -80,8 +168,10 @@ const Login = () => {
             <div className="glass-card p-2 px-4 flex items-center gap-3 mb-6">
               {role === "admin" ? (
                 <Shield className="w-4 h-4 text-primary" />
-              ) : (
+              ) : role === "manager" ? (
                 <Store className="w-4 h-4 text-gold" />
+              ) : (
+                <Shield className="w-4 h-4 text-yellow-600" />
               )}
               <span className="text-sm text-foreground capitalize">{role} Login</span>
             </div>
@@ -94,6 +184,7 @@ const Login = () => {
                 placeholder="you@jugaadnights.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
                 className="bg-secondary border-border focus:border-primary h-11"
               />
             </div>
@@ -107,24 +198,49 @@ const Login = () => {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
                   className="bg-secondary border-border focus:border-primary h-11 pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  disabled={isLoading}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-50"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            <Button type="submit" className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
-              Sign In
+            <Button 
+              type="submit" 
+              disabled={isLoading}
+              className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-medium disabled:opacity-50"
+            >
+              {isLoading ? "Signing in..." : "Sign In"}
+            </Button>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or try demo account</span>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLoading}
+              onClick={() => handleDemoLogin(role as any)}
+              className="w-full h-11 disabled:opacity-50"
+            >
+              {isLoading ? "Loading..." : `Login as ${role} (Demo)`}
             </Button>
 
             <p className="text-center text-xs text-muted-foreground">
-              Forgot password? Contact your administrator
+              Demo credentials available. Try any email with any password.
             </p>
           </form>
         )}
