@@ -1,28 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Check, X, Clock } from "lucide-react";
+import { Check, X, Clock, Loader } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { toast } from "sonner";
-
-const staffList = [
-  { name: "Rajesh Kumar", role: "Chef", status: "present", inTime: "09:00", outTime: "18:00" },
-  { name: "Priya Sharma", role: "Server", status: "present", inTime: "09:15", outTime: "--" },
-  { name: "Amit Patel", role: "Chef", status: "late", inTime: "09:45", outTime: "--" },
-  { name: "Neha Singh", role: "Manager", status: "present", inTime: "08:55", outTime: "--" },
-  { name: "Karan Mehta", role: "Server", status: "absent", inTime: "--", outTime: "--" },
-  { name: "Sonia Gupta", role: "Cashier", status: "present", inTime: "09:02", outTime: "--" },
-  { name: "Vikram Joshi", role: "Kitchen Helper", status: "absent", inTime: "--", outTime: "--" },
-  { name: "Deepa Rao", role: "Server", status: "present", inTime: "09:10", outTime: "--" },
-];
-
-const monthlyData = [
-  { week: "Week 1", attendance: 92, late: 5 },
-  { week: "Week 2", attendance: 88, late: 8 },
-  { week: "Week 3", attendance: 95, late: 3 },
-  { week: "Week 4", attendance: 90, late: 6 },
-];
+import { useAuth } from "@/context/AuthContext";
+import { useAttendance, useCheckIn, useCheckOut } from "@/hooks/useApi";
 
 const tt = {
   contentStyle: {
@@ -34,8 +17,46 @@ const tt = {
   },
 };
 
+const SkeletonStaffRow = () => (
+  <tr className="border-b border-border/50 animate-pulse">
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-24"></div></td>
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-16"></div></td>
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-20 mx-auto"></div></td>
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-12 mx-auto"></div></td>
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-12 mx-auto"></div></td>
+    <td className="py-3"><div className="h-4 bg-secondary roundedw-16 mx-auto"></div></td>
+  </tr>
+);
+
+const StatCardSkeleton = () => (
+  <div className="glass-card p-4 animate-pulse">
+    <div className="h-8 bg-secondary rounded w-20 mb-1"></div>
+    <div className="h-3 bg-secondary rounded w-32"></div>
+  </div>
+);
+
 const Attendance = () => {
   const [view, setView] = useState<"entry" | "analytics">("entry");
+  const { user } = useAuth();
+  const { data: attendance, isLoading } = useAttendance(user?.outlet_id);
+  const checkInMutation = useCheckIn();
+  const checkOutMutation = useCheckOut();
+
+  const staffList = attendance?.map((record: any) => ({
+    name: record.staff_name,
+    role: record.role,
+    status: record.status === "checked_in" ? "present" : record.status === "late_check_in" ? "late" : "absent",
+    inTime: record.check_in_time ? record.check_in_time.substring(11, 16) : "--",
+    outTime: record.check_out_time ? record.check_out_time.substring(11, 16) : "--",
+    staffId: record.staff_id,
+  })) || [];
+
+  const monthlyData = [
+    { week: "Week 1", attendance: 92, late: 5 },
+    { week: "Week 2", attendance: 88, late: 8 },
+    { week: "Week 3", attendance: 95, late: 3 },
+    { week: "Week 4", attendance: 90, late: 6 },
+  ];
 
   return (
     <div className="space-y-6">
@@ -74,56 +95,92 @@ const Attendance = () => {
               </tr>
             </thead>
             <tbody>
-              {staffList.map((staff) => (
-                <tr key={staff.name} className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
-                  <td className="py-3 text-foreground font-medium">{staff.name}</td>
-                  <td className="py-3 text-muted-foreground">{staff.role}</td>
-                  <td className="py-3 text-center">
-                    {staff.status === "present" ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-success bg-success/10 px-2 py-1 rounded-full">
-                        <Check className="w-3 h-3" /> Present
-                      </span>
-                    ) : staff.status === "late" ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-warning bg-warning/10 px-2 py-1 rounded-full">
-                        <Clock className="w-3 h-3" /> Late
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-destructive bg-destructive/10 px-2 py-1 rounded-full">
-                        <X className="w-3 h-3" /> Absent
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 text-center text-muted-foreground">{staff.inTime}</td>
-                  <td className="py-3 text-center text-muted-foreground">{staff.outTime}</td>
-                  <td className="py-3 text-center">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs"
-                      onClick={() => toast.success(`Updated ${staff.name}'s attendance`)}
-                    >
-                      Edit
-                    </Button>
-                  </td>
+              {isLoading ? (
+                <>
+                  <SkeletonStaffRow />
+                  <SkeletonStaffRow />
+                  <SkeletonStaffRow />
+                  <SkeletonStaffRow />
+                </>
+              ) : staffList.length > 0 ? (
+                staffList.map((staff) => (
+                  <tr key={staff.name} className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
+                    <td className="py-3 text-foreground font-medium">{staff.name}</td>
+                    <td className="py-3 text-muted-foreground">{staff.role}</td>
+                    <td className="py-3 text-center">
+                      {staff.status === "present" ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-success bg-success/10 px-2 py-1 rounded-full">
+                          <Check className="w-3 h-3" /> Present
+                        </span>
+                      ) : staff.status === "late" ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-warning bg-warning/10 px-2 py-1 rounded-full">
+                          <Clock className="w-3 h-3" /> Late
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-destructive bg-destructive/10 px-2 py-1 rounded-full">
+                          <X className="w-3 h-3" /> Absent
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 text-center text-muted-foreground">{staff.inTime}</td>
+                    <td className="py-3 text-center text-muted-foreground">{staff.outTime}</td>
+                    <td className="py-3 text-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        disabled={checkInMutation.isPending || checkOutMutation.isPending}
+                        onClick={() => {
+                          if (staff.status === "present") {
+                            checkOutMutation.mutateAsync(staff.staffId);
+                          } else {
+                            checkInMutation.mutateAsync(staff.staffId);
+                          }
+                        }}
+                      >
+                        {staff.status === "present" ? "Check Out" : "Check In"}
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-6 text-center text-muted-foreground">No attendance records found</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: "Avg Attendance", value: "91.2%", color: "text-success" },
-              { label: "Late Arrivals", value: "5.5%", color: "text-warning" },
-              { label: "Total Staff", value: "52", color: "text-foreground" },
-              { label: "Overtime Hours", value: "48h", color: "text-gold" },
-            ].map((stat) => (
-              <div key={stat.label} className="glass-card p-4">
-                <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-                <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
-              </div>
-            ))}
+            {isLoading ? (
+              <>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </>
+            ) : (
+              <>
+                <div className="glass-card p-4">
+                  <p className="text-2xl font-bold text-success">91.2%</p>
+                  <p className="text-xs text-muted-foreground mt-1">Avg Attendance</p>
+                </div>
+                <div className="glass-card p-4">
+                  <p className="text-2xl font-bold text-warning">5.5%</p>
+                  <p className="text-xs text-muted-foreground mt-1">Late Arrivals</p>
+                </div>
+                <div className="glass-card p-4">
+                  <p className="text-2xl font-bold text-foreground">{staffList.length}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Total Staff</p>
+                </div>
+                <div className="glass-card p-4">
+                  <p className="text-2xl font-bold text-gold">48h</p>
+                  <p className="text-xs text-muted-foreground mt-1">Overtime Hours</p>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="glass-card p-5">

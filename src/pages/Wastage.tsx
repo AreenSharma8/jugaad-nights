@@ -2,38 +2,57 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Trash2, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { Trash2, Plus, Loader } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { useWastage, useLogWastage } from "@/hooks/useApi";
 
-const wastageHistory = [
-  { date: "Feb 17", outlet: "Navrangpura", item: "Paneer", weight: 1.2, reason: "Expired" },
-  { date: "Feb 17", outlet: "Prahlad Nagar", item: "Tomatoes", weight: 2.0, reason: "Spoiled" },
-  { date: "Feb 16", outlet: "Sindhu Bhavan", item: "Chicken", weight: 1.5, reason: "Overcooked" },
-  { date: "Feb 16", outlet: "Navrangpura", item: "Cream", weight: 0.8, reason: "Expired" },
-  { date: "Feb 15", outlet: "Prahlad Nagar", item: "Rice", weight: 3.0, reason: "Burnt" },
-  { date: "Feb 15", outlet: "Sindhu Bhavan", item: "Onions", weight: 1.0, reason: "Spoiled" },
-];
+const SkeletonHistoryRow = () => (
+  <tr className="border-b border-border/50 animate-pulse">
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-16"></div></td>
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-24"></div></td>
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-20"></div></td>
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-12 ml-auto"></div></td>
+    <td className="py-3"><div className="h-4 bg-secondary rounded w-24"></div></td>
+  </tr>
+);
 
 const Wastage = () => {
+  const { user } = useAuth();
+  const { data: wastageData, isLoading } = useWastage(user?.outlet_id);
+  const logWastageMutation = useLogWastage();
   const [outlet, setOutlet] = useState("");
   const [material, setMaterial] = useState("");
   const [weight, setWeight] = useState("");
   const [reason, setReason] = useState("");
 
+  const wastageHistory = wastageData?.map((item: any) => ({
+    date: new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    outlet: user?.outlet_name || "Current Outlet",
+    item: item.item_name,
+    weight: item.quantity,
+    reason: item.reason,
+  })) || [];
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Wastage entry submitted successfully");
-    setOutlet("");
-    setMaterial("");
-    setWeight("");
-    setReason("");
+    logWastageMutation.mutateAsync({
+      item_name: material,
+      quantity: parseFloat(weight),
+      reason,
+      outlet_id: user?.outlet_id,
+    }).finally(() => {
+      setOutlet("");
+      setMaterial("");
+      setWeight("");
+      setReason("");
+    });
   };
 
   return (
     <div className="space-y-6 max-w-4xl">
       <h1 className="font-display text-2xl font-bold text-foreground">Wastage Entry</h1>
 
-      {/* Entry Form */}
+      {/* Entry Form - Always visible, not blocked by loading */}
       <form onSubmit={handleSubmit} className="glass-card p-5 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -91,13 +110,26 @@ const Wastage = () => {
             />
           </div>
         </div>
-        <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
-          <Plus className="w-4 h-4" />
-          Submit Entry
+        <Button 
+          type="submit" 
+          disabled={logWastageMutation.isPending}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+        >
+          {logWastageMutation.isPending ? (
+            <>
+              <Loader className="w-4 h-4 animate-spin" />
+              Submitting...
+            </>
+          ) : (
+            <>
+              <Plus className="w-4 h-4" />
+              Submit Entry
+            </>
+          )}
         </Button>
       </form>
 
-      {/* History */}
+      {/* History - Shows progressively */}
       <div className="glass-card p-5 overflow-x-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-lg font-semibold text-foreground">Wastage History</h3>
@@ -117,15 +149,27 @@ const Wastage = () => {
             </tr>
           </thead>
           <tbody>
-            {wastageHistory.map((item, i) => (
-              <tr key={i} className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
-                <td className="py-3 text-muted-foreground">{item.date}</td>
-                <td className="py-3 text-foreground">{item.outlet}</td>
-                <td className="py-3 text-foreground font-medium">{item.item}</td>
-                <td className="py-3 text-right text-destructive font-medium">{item.weight} KG</td>
-                <td className="py-3 text-muted-foreground">{item.reason}</td>
+            {isLoading ? (
+              <>
+                <SkeletonHistoryRow />
+                <SkeletonHistoryRow />
+                <SkeletonHistoryRow />
+              </>
+            ) : wastageHistory.length > 0 ? (
+              wastageHistory.map((item, i) => (
+                <tr key={i} className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
+                  <td className="py-3 text-muted-foreground">{item.date}</td>
+                  <td className="py-3 text-foreground">{item.outlet}</td>
+                  <td className="py-3 text-foreground font-medium">{item.item}</td>
+                  <td className="py-3 text-right text-destructive font-medium">{item.weight} KG</td>
+                  <td className="py-3 text-muted-foreground">{item.reason}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-muted-foreground">No wastage records found</td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
