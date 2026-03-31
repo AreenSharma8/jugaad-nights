@@ -22,20 +22,98 @@ import NotFound from "./pages/NotFound";
 
 // Admin Pages (to be created)
 import AdminDashboard from "./pages/AdminDashboard";
-import AdminWastage from "./pages/AdminWastage";
-import AdminInventory from "./pages/AdminInventory";
 
 // Staff Pages (to be created)
 import StaffDashboard from "./pages/StaffDashboard";
-import StaffWastage from "./pages/StaffWastage";
-import StaffInventory from "./pages/StaffInventory";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
+
+/**
+ * SINGLE SOURCE OF REDIRECT TRUTH
+ * 
+ * Root route (`/`) is the ONLY place that decides:
+ * - If authenticated → redirect to /dashboard
+ * - If not authenticated → show login
+ * 
+ * OTHER redirect sources (Login.tsx, ProtectedRoute.tsx):
+ * - Login redirects authenticated users back to /dashboard
+ * - ProtectedRoute blocks unauthenticated users from /dashboard
+ * 
+ * This prevents redirect loops by avoiding multiple overlapping redirects
+ */
+
+// ✅ FIX: Root route component - SINGLE SOURCE OF REDIRECT TRUTH
+// This is the ONLY place that handles / → /dashboard or /login redirect
+// 
+// Why separate from RoleBasedRouter:
+// - Handles initial page load at /
+// - Doesn't interfere with other route logic
+// - Prevents double-redirect scenarios
+const RootRoute = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Wait for auth initialization before rendering anything
+  // This prevents showing login briefly then redirecting to dashboard
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * Root redirect decision:
+   * - If authenticated (verified token + user) → go to /dashboard
+   * - Otherwise → show login page (don't stay at / with blank page)
+   * 
+   * Prevents:
+   * - Showing blank page at /
+   * - Redirect loops
+   * - Unauthorized dashboard access
+   */
+  return isAuthenticated ? (
+    <Navigate to="/dashboard" replace />
+  ) : (
+    <Login />
+  );
+};
+
+const DashboardByRole = () => {
+  const { user } = useAuth();
+
+  if (user?.roles?.includes("admin")) {
+    return <AdminDashboard />;
+  }
+
+  if (user?.roles?.includes("staff")) {
+    return <StaffDashboard />;
+  }
+
+  return <Dashboard />;
+};
 
 // Component to handle role-based routing
+// ⚠️ IMPORTANT: This router waits for auth initialization and then renders routes
+// Do NOT add root (/) redirect logic here - use RootRoute component above
 const RoleBasedRouter = () => {
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { isLoading } = useAuth();
 
+  // Wait for auth to load before rendering ANY routes
+  // Prevents showing login/dashboard/404 before we know the user's auth status
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -49,11 +127,19 @@ const RoleBasedRouter = () => {
 
   return (
     <Routes>
-      {/* Public routes */}
+      {/* 
+        PUBLIC ROUTES
+        Accessible without authentication
+        Login.tsx handles: if authenticated → redirect to /dashboard
+      */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 
-      {/* Redirect admin and staff to dashboard with role-based limitations */}
+      {/* 
+        ROLE REDIRECTS
+        These are convenience redirects for old URL patterns
+        Users can navigate to /dashboard based on their role using role-based access control
+      */}
       <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
       <Route path="/admin/wastage" element={<Navigate to="/dashboard/wastage" replace />} />
       <Route path="/admin/inventory" element={<Navigate to="/dashboard/inventory" replace />} />
@@ -62,7 +148,13 @@ const RoleBasedRouter = () => {
       <Route path="/staff/wastage" element={<Navigate to="/dashboard/wastage" replace />} />
       <Route path="/staff/inventory" element={<Navigate to="/dashboard/inventory" replace />} />
 
-      {/* Customer/Default dashboard routes - Always rendered, access controlled by ProtectedRoute */}
+      {/* 
+        PROTECTED ROUTES
+        Wrapped in ProtectedRoute component which:
+        - Waits for auth initialization (shows spinner)
+        - Redirects unauthenticated users to /login
+        - Checks role-based access if needed
+      */}
       <Route 
         path="/dashboard" 
         element={
@@ -71,7 +163,7 @@ const RoleBasedRouter = () => {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Dashboard />} />
+        <Route index element={<DashboardByRole />} />
         <Route path="sales" element={<Sales />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="wastage" element={<Wastage />} />
@@ -82,8 +174,12 @@ const RoleBasedRouter = () => {
         <Route path="attendance" element={<Attendance />} />
       </Route>
 
-      {/* Root route - just render login, let login handle navigation */}
-      <Route path="/" element={<Login />} />
+      {/* 
+        ROOT ROUTE
+        Handled by RootRoute component above
+        Must be last to avoid catching all other routes
+      */}
+      <Route path="/" element={<RootRoute />} />
       
       {/* Not found */}
       <Route path="*" element={<NotFound />} />

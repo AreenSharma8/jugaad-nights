@@ -1,11 +1,9 @@
-import { Controller, Get, Post, Query, UseFilters, Logger, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Query, Logger, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
-import { GlobalExceptionFilter } from '../../../common/filters/global-exception.filter';
 import { AnalyticsService } from '../services/analytics.service';
 
 @ApiTags('Analytics')
 @ApiBearerAuth()
-@UseFilters(GlobalExceptionFilter)
 @Controller('analytics')
 export class AnalyticsController {
   private readonly logger = new Logger(AnalyticsController.name);

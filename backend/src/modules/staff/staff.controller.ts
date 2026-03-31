@@ -1,6 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
+import { Controller, Get, Post, Body, Param, Request, HttpException, HttpStatus } from '@nestjs/common';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApiResponse } from '../../common/interfaces/api-response.interface';
 
@@ -12,7 +10,6 @@ import { ApiResponse } from '../../common/interfaces/api-response.interface';
  */
 
 @Controller('staff')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('staff', 'admin')
 export class StaffController {
   /**

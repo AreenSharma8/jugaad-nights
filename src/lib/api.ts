@@ -21,11 +21,24 @@ class ApiClient {
       },
     });
 
+    // Always attach latest token from localStorage for each request.
+    this.client.interceptors.request.use((config) => {
+      const token = localStorage.getItem("auth_token");
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+
     // Add response interceptor
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        console.error("API Error:", error);
+        // 401s can happen during expired session flows; avoid noisy console spam.
+        if (error.response?.status !== 401) {
+          console.error("API Error:", error);
+        }
         return Promise.reject(error);
       }
     );

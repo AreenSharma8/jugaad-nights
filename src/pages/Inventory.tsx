@@ -1,10 +1,14 @@
-import { Loader, AlertTriangle, CheckCircle } from "lucide-react";
+import { Loader, AlertTriangle, CheckCircle, Plus } from "lucide-react";
+import { useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar
 } from "recharts";
-import { useAuth } from "@/contexts/AuthContext";
-import { useInventory, useLowStockItems, useInventoryHealth } from "@/hooks/useApi";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
+import { useInventory, useLowStockItems, useInventoryHealth, useCreateInventoryItem } from "@/hooks/useApi";
 
 const tt = {
   contentStyle: {
@@ -18,6 +22,46 @@ const tt = {
 
 const Inventory = () => {
   const { user } = useAuth();
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    item_name: "",
+    category: "",
+    current_quantity: "",
+    unit: "",
+    reorder_level: "",
+    unit_cost: "",
+  });
+
+  const createInventoryMutation = useCreateInventoryItem();
+
+  const handleSubmitItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    const itemData = {
+      item_name: formData.item_name,
+      category: formData.category,
+      current_quantity: parseFloat(formData.current_quantity) || 0,
+      unit: formData.unit,
+      reorder_level: parseFloat(formData.reorder_level) || 0,
+      reorder_quantity: parseFloat(formData.reorder_level) || 0,
+      unit_cost: parseFloat(formData.unit_cost) || 0,
+      outlet_id: user?.outlet_id,
+    };
+
+    createInventoryMutation.mutateAsync(itemData).then(() => {
+      setFormData({
+        item_name: "",
+        category: "",
+        current_quantity: "",
+        unit: "",
+        reorder_level: "",
+        unit_cost: "",
+      });
+      setShowForm(false);
+    }).catch((error: any) => {
+      console.error('Inventory item submission error:', error);
+      alert('Failed to create inventory item: ' + (error?.message || 'Unknown error'));
+    });
+  };
   
   // Fetch real inventory data
   const { data: inventory, isLoading: invLoading } = useInventory(user?.outlet_id);
@@ -39,19 +83,121 @@ const Inventory = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-2xl font-bold text-foreground">Inventory & Purchase Analytics</h1>
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <select className="bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground">
-          <option>Current Outlet</option>
-        </select>
-        <select className="bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground">
-          <option>This Month</option>
-          <option>Last Month</option>
-          <option>Last 3 Months</option>
-        </select>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-bold text-foreground">Inventory & Purchase Analytics</h1>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex gap-1 items-center"
+        >
+          <Plus className="w-4 h-4" /> {showForm ? "Hide" : "New"} Item
+        </button>
       </div>
+
+      {/* Add Item Form */}
+      {showForm && (
+        <form onSubmit={handleSubmitItem} className="glass-card p-5 space-y-4">
+          <h3 className="font-display text-lg font-semibold text-foreground">Add Inventory Item</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Outlet</Label>
+              <div className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground">
+                Navrangpura
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Item Name *</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Paneer"
+                value={formData.item_name}
+                onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
+                className="bg-secondary border-border h-11"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Category *</Label>
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground"
+                required
+              >
+                <option value="">Select Category</option>
+                <option>Dairy</option>
+                <option>Proteins</option>
+                <option>Vegetables</option>
+                <option>Spices</option>
+                <option>Oils</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Unit *</Label>
+              <select
+                value={formData.unit}
+                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground"
+                required
+              >
+                <option value="">Select Unit</option>
+                <option>KG</option>
+                <option>LTR</option>
+                <option>PIECE</option>
+                <option>BOX</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Current Stock *</Label>
+              <Input
+                type="number"
+                step="0.1"
+                placeholder="e.g. 50"
+                value={formData.current_quantity}
+                onChange={(e) => setFormData({ ...formData, current_quantity: e.target.value })}
+                className="bg-secondary border-border h-11"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Reorder Level *</Label>
+              <Input
+                type="number"
+                step="0.1"
+                placeholder="e.g. 10"
+                value={formData.reorder_level}
+                onChange={(e) => setFormData({ ...formData, reorder_level: e.target.value })}
+                className="bg-secondary border-border h-11"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Unit Cost (₹) *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="e.g. 200"
+                value={formData.unit_cost}
+                onChange={(e) => setFormData({ ...formData, unit_cost: e.target.value })}
+                className="bg-secondary border-border h-11"
+                required
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-4">
+            <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              Save Item
+            </Button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-secondary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Stock Status - Critical alerts first */}
       {stockItems.length > 0 && (

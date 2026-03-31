@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { Loader } from "lucide-react";
+import { Loader, Plus, X } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area
 } from "recharts";
-import { useAuth } from "@/contexts/AuthContext";
-import { useOrders, useSalesTrends } from "@/hooks/useApi";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
+import { useOrders, useSalesTrends, useCreateOrder } from "@/hooks/useApi";
 
 const tt = {
   contentStyle: {
@@ -20,6 +23,66 @@ const tt = {
 const Sales = () => {
   const { user } = useAuth();
   const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [showForm, setShowForm] = useState(true);
+  const [formData, setFormData] = useState({
+    customer_name: "",
+    customer_phone: "",
+    order_type: "Dine In",
+    payment_type: "Cash",
+    items: [{ item_name: "", quantity: 1, unit_price: 0 }],
+  });
+
+  const handleAddItem = () => {
+    setFormData({
+      ...formData,
+      items: [...formData.items, { item_name: "", quantity: 1, unit_price: 0 }],
+    });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setFormData({
+      ...formData,
+      items: formData.items.filter((_, i) => i !== index),
+    });
+  };
+
+  const handleItemChange = (index: number, field: string, value: any) => {
+    const newItems = [...formData.items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setFormData({ ...formData, items: newItems });
+  };
+
+  const createOrderMutation = useCreateOrder();
+
+  const handleSubmitOrder = (e: React.FormEvent) => {
+    e.preventDefault();
+    const orderData = {
+      customer_name: formData.customer_name || 'Walk-in Customer',
+      customer_phone: formData.customer_phone || 'N/A',
+      order_type: formData.order_type,
+      payment_type: formData.payment_type,
+      items: formData.items.filter(item => item.item_name && item.quantity),
+      outlet_id: user?.outlet_id,
+    };
+    
+    if (orderData.items.length === 0) {
+      alert('Please add at least one item');
+      return;
+    }
+
+    createOrderMutation.mutateAsync(orderData).then(() => {
+      setFormData({
+        customer_name: "",
+        customer_phone: "",
+        order_type: "Dine In",
+        payment_type: "Cash",
+        items: [{ item_name: "", quantity: 1, unit_price: 0 }],
+      });
+    }).catch((error: any) => {
+      console.error('Order submission error:', error);
+      alert('Failed to create order: ' + (error?.message || 'Unknown error'));
+    });
+  };
 
   // Calculate date range based on period
   const getDates = () => {
@@ -77,22 +140,160 @@ const Sales = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-bold text-foreground">Sales & Billing</h1>
-        <div className="ml-auto flex gap-1 bg-secondary rounded-lg p-1">
-          {(["daily", "weekly", "monthly"] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
-                period === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex gap-1 items-center"
+          >
+            <Plus className="w-4 h-4" /> {showForm ? "Hide" : "New"} Order
+          </button>
+          <div className="ml-auto flex gap-1 bg-secondary rounded-lg p-1">
+            {(["daily", "weekly", "monthly"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
+                  period === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* Order Entry Form */}
+      {showForm && (
+        <form onSubmit={handleSubmitOrder} className="glass-card p-5 space-y-4">
+          <h3 className="font-display text-lg font-semibold text-foreground">Record New Order</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Outlet</Label>
+              <div className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground">
+                Navrangpura
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Customer Name</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Rajesh Patel"
+                value={formData.customer_name}
+                onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
+                className="bg-secondary border-border h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Phone</Label>
+              <Input
+                type="tel"
+                placeholder="e.g. 9876543210"
+                value={formData.customer_phone}
+                onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
+                className="bg-secondary border-border h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Order Type</Label>
+              <select
+                value={formData.order_type}
+                onChange={(e) => setFormData({ ...formData, order_type: e.target.value })}
+                className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground"
+              >
+                <option>Dine In</option>
+                <option>Pick Up</option>
+                <option>Delivery</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Payment Type</Label>
+              <select
+                value={formData.payment_type}
+                onChange={(e) => setFormData({ ...formData, payment_type: e.target.value })}
+                className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground"
+              >
+                <option>Cash</option>
+                <option>Card</option>
+                <option>Online</option>
+                <option>Part Payment</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Items Section */}
+          <div className="space-y-3 pt-4 border-t border-border">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-foreground">Items</h4>
+              <button
+                type="button"
+                onClick={handleAddItem}
+                className="text-primary hover:text-primary/80 text-xs font-medium flex gap-1 items-center"
+              >
+                <Plus className="w-3 h-3" /> Add Item
+              </button>
+            </div>
+            {formData.items.map((item, idx) => (
+              <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs">Item Name</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Butter Chicken"
+                    value={item.item_name}
+                    onChange={(e) => handleItemChange(idx, "item_name", e.target.value)}
+                    className="bg-secondary border-border h-10 text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs">Qty</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={item.quantity}
+                    onChange={(e) => handleItemChange(idx, "quantity", parseInt(e.target.value))}
+                    className="bg-secondary border-border h-10 text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs">Price</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="250"
+                    value={item.unit_price}
+                    onChange={(e) => handleItemChange(idx, "unit_price", parseFloat(e.target.value))}
+                    className="bg-secondary border-border h-10 text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveItem(idx)}
+                  className="h-10 px-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors flex items-center justify-center"
+                  disabled={formData.items.length === 1}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2 pt-4">
+            <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              Save Order
+            </Button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-secondary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-4">
         {/* Sales Trend */}

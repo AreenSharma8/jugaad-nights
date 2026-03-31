@@ -1,17 +1,23 @@
 /**
- * Authentication Context
- * Provides authentication state and methods to the entire application
+ * Authentication Context - SECURE & SIMPLE
+ * 
+ * Architecture:
+ * - Token = unverified credential (from localStorage)
+ * - VERIFIED token = actual authentication (after /auth/verify)
+ * - Both token and user are set ATOMICALLY (together or not at all)
+ * - localStorage is validated on app load, corrupted data is cleared
  */
 
 import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { authService, authApi, type User, type LoginResponse } from '@/services';
 import type { CustomerSignupCredentials, StaffSignupCredentials, AdminSignupCredentials } from '@/services/authApi.service';
+import axiosApiClient from '@/lib/api';
 
 export interface AuthContextType {
   // State
   user: User | null;
   token: string | null;
-  isAuthenticated: boolean;
+  isAuthenticated: boolean; // Only true if token is verified and valid
   isLoading: boolean;
   error: string | null;
 
@@ -62,7 +68,22 @@ function transformAuthResponse(response: any): LoginResponse {
 }
 
 /**
- * Authentication Provider Component
+ * Helper: Validate stored user structure before using
+ * Prevents crashes from corrupted localStorage data
+ */
+function isValidUser(user: any): user is User {
+  return (
+    user &&
+    typeof user === 'object' &&
+    typeof user.id === 'string' &&
+    typeof user.email === 'string' &&
+    typeof user.name === 'string' &&
+    Array.isArray(user.roles)
+  );
+}
+
+/**
+ * Authentication Provider Component - SECURE INITIALIZATION
  */
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -71,30 +92,73 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Initialize auth state from localStorage
+   * CRITICAL: Initialize auth state from localStorage with strict validation
+   * 
+   * Flow:
+   * 1. Get stored token and user from localStorage
+   * 2. ONLY if token exists: verify it's still valid via backend
+   * 3. If valid: set BOTH token and user atomically
+   * 4. If invalid/expired: clear localStorage completely
+   * 5. Handle corrupted data gracefully
+   * 
+   * Why this is important:
+   * - Prevents redirect loops (forces /dashboard on invalid token)
+   * - Prevents unauthorized access (stale token treated as valid)
+   * - Handles corrupted localStorage gracefully
+   * - Ensures atomic state (no partial login)
    */
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        setIsLoading(true);
+        
+        // Step 1: Get stored credentials from localStorage
         const storedToken = authService.getToken();
         const storedUser = authService.getUser();
 
+        // Step 2: If token exists, verify it's still valid
         if (storedToken && storedUser) {
-          // Verify token is still valid
           try {
+            // Validate stored user structure before using it
+            // Prevents crashes from corrupted data
+            if (!isValidUser(storedUser)) {
+              console.warn('⚠️ Stored user data is corrupted, clearing localStorage');
+              authService.clearAuth();
+              setToken(null);
+              setUser(null);
+              return;
+            }
+
+            // Call backend to verify token is still valid
+            // This is REQUIRED - don't trust localStorage alone
             await authApi.verifyToken();
+
+            // Step 3: Token is valid, set state ATOMICALLY (together)
+            // This prevents React rendering partial auth state
             setToken(storedToken);
             setUser(storedUser);
+            axiosApiClient.setAuthToken(storedToken);
           } catch (error) {
-            // Token is invalid, clear auth
+            // Step 4: Token is invalid/expired, clear all auth data
+            // This prevents unauthorized access with stale tokens
+            console.warn('⚠️ Token validation failed, clearing auth state');
             authService.clearAuth();
             setToken(null);
             setUser(null);
+            axiosApiClient.setAuthToken('');
           }
         }
+        // If no stored token, user starts in logged-out state (nothing to do)
       } catch (error) {
-        console.error('Auth initialization failed:', error);
+        // Step 5: Unexpected error during initialization
+        // Log and continue - app stays in logged-out state
+        console.error('❌ Auth initialization failed:', error);
+        authService.clearAuth();
+        setToken(null);
+        setUser(null);
+        axiosApiClient.setAuthToken('');
       } finally {
+        // Initialization complete - allow app to render
         setIsLoading(false);
       }
     };
@@ -102,37 +166,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, []);
 
+  // Keep Axios client in sync with auth state used by fetch-based auth client.
+  useEffect(() => {
+    axiosApiClient.setAuthToken(token || '');
+  }, [token]);
+
   /**
-   * Login handler
+   * Login handler - ATOMIC STATE UPDATE
+   * Sets token and user together to prevent partial auth state
+   * Prevents redirect loops by having clean state after login
    */
   const login = useCallback(async (email: string, password: string) => {
     try {
       setIsLoading(true);
       setError(null);
 
-      console.log('🔍 [AuthContext] Starting login with email:', email);
       const apiResponse = await authApi.login({ email, password });
-      
-      console.log('🔍 [AuthContext] API response received:', apiResponse);
-
-      // Transform and validate response
       const response = transformAuthResponse(apiResponse);
-      console.log('🔍 [AuthContext] Transformed response:', response);
 
-      // Store in localStorage and state
-      console.log('🔍 [AuthContext] Calling authService.setAuth...');
+      // ATOMIC: Store credentials and update state together
+      // Prevents React from rendering with just token but no user
       authService.setAuth(response);
-      
-      // Verify storage
-      const storedUserTest = authService.getUser();
-      console.log('🔍 [AuthContext] Verified storage:', storedUserTest);
-
       setToken(response.token);
       setUser(response.user);
-      
-      console.log('✅ [AuthContext] Login successful');
+      axiosApiClient.setAuthToken(response.token);
     } catch (err: any) {
-      console.error('❌ [AuthContext] login() error:', err);
       const errorMessage = err?.message || 'Login failed';
       setError(errorMessage);
       throw new Error(errorMessage);
@@ -142,7 +200,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   /**
-   * Customer signup handler
+   * Customer signup handler - ATOMIC STATE UPDATE
    */
   const signupCustomer = useCallback(async (credentials: CustomerSignupCredentials) => {
     try {
@@ -152,10 +210,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const apiResponse = await authApi.signupCustomer(credentials);
       const response = transformAuthResponse(apiResponse);
 
-      // Store in localStorage and state
+      // ATOMIC: Store and update state together
       authService.setAuth(response);
       setToken(response.token);
       setUser(response.user);
+      axiosApiClient.setAuthToken(response.token);
     } catch (err: any) {
       const errorMessage = err?.message || 'Customer signup failed';
       setError(errorMessage);
@@ -166,7 +225,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   /**
-   * Staff signup handler
+   * Staff signup handler - ATOMIC STATE UPDATE
    */
   const signupStaff = useCallback(async (credentials: StaffSignupCredentials) => {
     try {
@@ -176,10 +235,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const apiResponse = await authApi.signupStaff(credentials);
       const response = transformAuthResponse(apiResponse);
 
-      // Store in localStorage and state
+      // ATOMIC: Store and update state together
       authService.setAuth(response);
       setToken(response.token);
       setUser(response.user);
+      axiosApiClient.setAuthToken(response.token);
     } catch (err: any) {
       const errorMessage = err?.message || 'Staff signup failed';
       setError(errorMessage);
@@ -190,7 +250,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   /**
-   * Admin signup handler
+   * Admin signup handler - ATOMIC STATE UPDATE
    */
   const signupAdmin = useCallback(async (credentials: AdminSignupCredentials) => {
     try {
@@ -200,10 +260,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const apiResponse = await authApi.signupAdmin(credentials);
       const response = transformAuthResponse(apiResponse);
 
-      // Store in localStorage and state
+      // ATOMIC: Store and update state together
       authService.setAuth(response);
       setToken(response.token);
       setUser(response.user);
+      axiosApiClient.setAuthToken(response.token);
     } catch (err: any) {
       const errorMessage = err?.message || 'Admin signup failed';
       setError(errorMessage);
@@ -214,13 +275,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   /**
-   * Logout handler
+   * Logout handler - CLEAR ALL AUTH DATA
+   * Ensures complete cleanup from both state and localStorage
+   * Prevents redirect loop by clearing token first
    */
   const logout = useCallback(() => {
     authService.clearAuth();
     setToken(null);
     setUser(null);
     setError(null);
+    axiosApiClient.setAuthToken('');
   }, []);
 
   /**
@@ -264,10 +328,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return user?.user_type || null;
   }, [user]);
 
+  // Build context value with VERIFIED authentication state
+  // isAuthenticated = true ONLY if we have BOTH token AND verified user
+  // This prevents dashboard access with partial auth state
   const value: AuthContextType = {
     user,
     token,
-    isAuthenticated: !!user && !!token,
+    isAuthenticated: !!token && !!user, // Both must exist for true authentication
     isLoading,
     error,
     login,
@@ -283,7 +350,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   return (
-
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>

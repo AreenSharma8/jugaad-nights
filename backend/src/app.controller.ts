@@ -1,8 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
 import type { ApiResponse } from './common/interfaces/api-response.interface';
+import { Public } from './common/decorators/public.decorator';
 
 @Controller()
 export class AppController {
+  @Public()
   @Get()
   getHealth(): ApiResponse {
     return {
@@ -16,6 +18,7 @@ export class AppController {
     };
   }
 
+  @Public()
   @Get('health')
   health(): ApiResponse {
     return {

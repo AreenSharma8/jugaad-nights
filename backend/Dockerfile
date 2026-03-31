@@ -1,48 +1,68 @@
-# Build stage
+# ==================== BUILD STAGE ====================
+# Multi-stage build to keep final image small
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy configuration files
+# Docker runtime defaults for service discovery
+ENV IN_DOCKER=true \
+  DB_HOST=postgres \
+  DB_PORT=5432 \
+  DB_USER=postgres \
+  DB_PASSWORD=postgres \
+  DB_NAME=jugaad_nights \
+  REDIS_HOST=redis \
+  REDIS_PORT=6379
+
+# Install build dependencies (if needed)
+RUN apk add --no-cache python3 make g++
+
+# Copy package files
 COPY package*.json ./
 COPY tsconfig*.json ./
 COPY nest-cli.json ./
-COPY .env.development ./
 
-# Install dependencies
+# Install all dependencies (including dev)
 RUN npm ci
 
 # Copy source code
 COPY src ./src
 
-# Build application
+# Build the application
 RUN npm run build
 
-# Production stage
+# ==================== PRODUCTION STAGE ====================
 FROM node:20-alpine
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nestjs -u 1001
 
 WORKDIR /app
 
-# Install dumb-init to handle PID 1 properly
-RUN apk add --no-cache dumb-init
-
-# Copy package files and environment
+# Copy package files
 COPY package*.json ./
-COPY .env.development ./
 
 # Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --only=production && \
+    npm cache clean --force && \
+    chown -R nestjs:nodejs /app
 
 # Copy built application from builder
-COPY --from=builder /app/dist ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+
+# Switch to non-root user
+USER nestjs
 
 # Expose port
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/docs', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+# Health check - verify API is responding
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Run application
-ENTRYPOINT ["dumb-init", "--"]
+# Start the application (Node.js handles signals natively)
 CMD ["node", "dist/main"]

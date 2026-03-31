@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Trash2, Plus, Loader } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useWastage, useLogWastage } from "@/hooks/useApi";
 
 const SkeletonHistoryRow = () => (
@@ -57,17 +57,9 @@ const Wastage = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label className="text-muted-foreground text-sm">Outlet</Label>
-            <select
-              value={outlet}
-              onChange={(e) => setOutlet(e.target.value)}
-              className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground"
-              required
-            >
-              <option value="">Select Outlet</option>
-              <option>Navrangpura</option>
-              <option>Prahlad Nagar</option>
-              <option>Sindhu Bhavan</option>
-            </select>
+            <div className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground">
+              Navrangpura
+            </div>
           </div>
           <div className="space-y-2">
             <Label className="text-muted-foreground text-sm">Raw Material</Label>

@@ -5,7 +5,6 @@ import {
   Delete,
   Param,
   Body,
-  UseFilters,
   Logger,
   HttpCode,
   HttpStatus,
@@ -15,13 +14,11 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
 import * as fs from 'fs';
-import { GlobalExceptionFilter } from '../../../common/filters/global-exception.filter';
 import { ReportService } from '../services/report.service';
 import { CreateReportDto, GenerateReportDto } from '../dto/report.dto';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
-@UseFilters(GlobalExceptionFilter)
 @Controller('reports')
 export class ReportController {
   private readonly logger = new Logger(ReportController.name);

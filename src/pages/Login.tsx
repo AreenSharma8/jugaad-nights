@@ -1,22 +1,41 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Shield, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { authService } from "@/services";
 
 const Login = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const { login, isLoading, error } = useAuth();
+  const { login, isLoading, error, isAuthenticated, user } = useAuth();
 
   const [role, setRole] = useState<"admin" | "staff" | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  /**
+   * SECURITY: Only redirect to dashboard if:
+   * 1. User is authenticated (verified token + valid user)
+   * 2. force=true query param is NOT set (allows testing)
+   * 
+   * This prevents:
+   * - Redirect loops (both Login and RootRoute trying to redirect)
+   * - Blocking manual login attempts
+   * - Forcing users to dashboard with invalid auth state
+   */
+  const forceShowLogin = searchParams.get('force') === 'true';
+  
+  const getRedirectPathByRole = (_roleName?: string | null) => "/dashboard";
+
+  if (isAuthenticated && !forceShowLogin) {
+    const primaryRole = user?.roles?.[0] || user?.role || user?.user_type;
+    return <Navigate to={getRedirectPathByRole(primaryRole)} replace />;
+  }
 
   // Map role to demo email
   const getDemoEmail = () => {
@@ -43,46 +62,18 @@ const Login = () => {
     }
 
     try {
-      console.log('🔍 [Login] Starting login with email:', email);
-      
       await login(email, password);
-      
-      console.log('🔍 [Login] Login completed, checking localStorage...');
-      console.log('🔍 [Login] auth_token:', localStorage.getItem('auth_token'));
-      console.log('🔍 [Login] auth_user:', localStorage.getItem('auth_user'));
-      
-      // Get user from localStorage
-      const userData = authService.getUser();
-      
-      console.log('🔍 [Login] userData from authService:', userData);
-      
-      if (!userData) {
-        throw new Error("User data not found after login - localStorage is empty");
-      }
-
-      if (!userData.user_type) {
-        console.error('❌ [Login] user_type is missing:', userData);
-        throw new Error("User data incomplete: missing user_type");
-      }
-
       toast({
         title: "Success",
         description: "Logged in successfully!",
       });
 
-      console.log('🔍 [Login] Navigating to /dashboard (all roles)');
-      
-      // 🔥 All roles navigate to /dashboard (admin/staff access is limited by role in DashboardLayout)
-      navigate("/dashboard", { replace: true });
-      
+      // Explicit navigation is required for /login?force=true flows.
+      navigate(getRedirectPathByRole(role), { replace: true });
     } catch (err: any) {
-      console.error('❌ [Login] handleLogin error:', err);
-      const errorMessage = err.message || "Invalid credentials";
-      console.error('❌ [Login] Error message:', errorMessage);
-      
       toast({
         title: "Login Failed",
-        description: errorMessage,
+        description: err.message || "Invalid credentials",
         variant: "destructive",
       });
     }
@@ -94,49 +85,14 @@ const Login = () => {
       : "staff@jugaadnights.com";
 
     try {
-      console.log('🔍 [DemoLogin] Starting demo login for:', demoRole);
-      console.log('🔍 [DemoLogin] Using email:', demoEmail);
-      
       await login(demoEmail, "Demo@12345");
-      
-      console.log('🔍 [DemoLogin] login() completed successfully');
-      
-      // Check localStorage directly
-      const token = localStorage.getItem('auth_token');
-      const userStr = localStorage.getItem('auth_user');
-      console.log('🔍 [DemoLogin] localStorage keys:', {
-        hasToken: !!token,
-        tokenLength: token?.length,
-        hasUserStr: !!userStr,
-      });
-      
-      const userData = authService.getUser();
-      console.log('🔍 [DemoLogin] authService.getUser() returned:', userData);
-      
-      if (!userData) {
-        console.error('❌ [DemoLogin] No user data in localStorage');
-        throw new Error("User data not found after demo login - localStorage is empty");
-      }
-
-      if (!userData.user_type) {
-        console.error('❌ [DemoLogin] user_type missing:', userData);
-        throw new Error("User data incomplete: missing user_type");
-      }
-
       toast({
         title: "Success",
         description: "Logged in as demo user!",
       });
 
-      // 🔥 All roles navigate to /dashboard (admin/staff access is limited by role in DashboardLayout)
-      console.log('🔍 [DemoLogin] Navigating to /dashboard (all roles)');
-      navigate("/dashboard", { replace: true });
-      
+      navigate(getRedirectPathByRole(demoRole), { replace: true });
     } catch (err: any) {
-      console.error('❌ [DemoLogin] Error occurred:', err);
-      console.error('❌ [DemoLogin] Error message:', err.message);
-      console.error('❌ [DemoLogin] Stack:', err.stack);
-      
       toast({
         title: "Login Failed",
         description: err.message || "Demo login failed",

@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Link, useLocation, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, ShoppingCart, Package, Trash2, FileText, PartyPopper,
-  Calendar, DollarSign, Users, Menu, X, LogOut, ChevronLeft,
-  Bell
+  Calendar, DollarSign, Users, Menu, LogOut, ChevronLeft,
+  Bell, Shield
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,10 +28,17 @@ const roleAccessMap: Record<string, string[]> = {
 };
 
 const DashboardLayout = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+
+  // Handle logout
+  const handleLogout = () => {
+    logout();
+    navigate('/', { replace: true });
+  };
 
   // Get accessible nav items based on user role
   const getUserRole = () => {
@@ -43,6 +50,13 @@ const DashboardLayout = () => {
   const userRole = getUserRole();
   const accessiblePaths = roleAccessMap[userRole] || roleAccessMap.customer;
   const accessibleNavItems = navItems.filter(item => accessiblePaths.includes(item.path));
+
+  useEffect(() => {
+    // Enforce role access even for direct URL navigation.
+    if (location.pathname.startsWith("/dashboard") && !accessiblePaths.includes(location.pathname)) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [accessiblePaths, location.pathname, navigate]);
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -108,15 +122,25 @@ const DashboardLayout = () => {
           </button>
         </div>
 
-        {/* Logout */}
-        <div className="px-2 pb-4 border-t border-sidebar-border pt-3">
+        {/* Account Options */}
+        <div className="px-2 pb-4 border-t border-sidebar-border pt-3 space-y-2">
+          {/* Switch Account - for testing different users */}
           <Link
-            to="/"
+            to="/login?force=true"
             className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+          >
+            <Shield className="w-5 h-5 shrink-0" />
+            {!collapsed && <span>Switch Account</span>}
+          </Link>
+          
+          {/* Logout */}
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
           >
             <LogOut className="w-5 h-5 shrink-0" />
             {!collapsed && <span>Logout</span>}
-          </Link>
+          </button>
         </div>
       </aside>
 

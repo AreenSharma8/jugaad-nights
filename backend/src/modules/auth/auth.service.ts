@@ -39,37 +39,32 @@ export class AuthService {
   constructor(private readonly userRepository: UserRepository) {}
 
   /**
-   * User login
-   * Validates email and password, returns JWT token
+   * User login - Validates credentials and returns JWT token
    */
   async login(loginDto: LoginDto): Promise<LoginResponse> {
     const { email, password } = loginDto;
-
-    if (!email || !password) {
-      throw new BadRequestException('Email and password are required');
-    }
 
     // Find user by email
     const user = await this.userRepository.findByEmail(email);
 
     if (!user) {
-      throw new NotFoundException(`User not found: ${email}`);
+      throw new NotFoundException('Invalid email or password');
     }
 
     // Verify password
     const isPasswordValid = await passwordService.comparePassword(password, user.password);
 
     if (!isPasswordValid) {
-      throw new BadRequestException('Invalid password');
+      throw new BadRequestException('Invalid email or password');
     }
 
     if (!user.is_active) {
       throw new BadRequestException('User account is inactive');
     }
 
-    // Get role names for JWT
-    const roleNames = user.roles?.map((r) => r.name) || [];
-    const primaryRole = roleNames[0] || 'customer';
+    // Get role names (safely handle if roles not loaded)
+    const roleNames: string[] = user.roles ? user.roles.map((r: any) => r.name) : [];
+    const primaryRole = roleNames[0] || user.user_type || 'user';
 
     // Generate JWT token
     const token = jwtService.sign({
@@ -80,19 +75,24 @@ export class AuthService {
       outlet_id: user.outlet_id,
     });
 
-    // Return user data without password and with transformed roles
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: pwd, roles: rolesEntities, ...userBase } = user;
-
-    return {
-      user: {
-        ...userBase,
-        roles: roleNames,
-        role: primaryRole,
-        user_type: primaryRole, // 🔥 Align user_type with primary role
-      },
-      token,
+    // Build response without exposing password
+    const userResponse = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      phone: user.phone || undefined,
+      outlet_id: user.outlet_id,
+      role: primaryRole,
+      roles: roleNames,
+      user_type: user.user_type || primaryRole,
+      gender: user.gender || undefined,
+      age: user.age || undefined,
+      is_active: user.is_active,
+      created_at: user.created_at,
+      updated_at: user.updated_at,
     };
+
+    return { user: userResponse, token };
   }
 
   /**
@@ -173,9 +173,9 @@ export class AuthService {
       throw new Error('Failed to retrieve created user');
     }
 
-    // Get role names
-    const roleNames = userWithRelations.roles?.map((r) => r.name) || [];
-    const primaryRole = roleNames[0] || userType;
+    // Get role names (safely handle if roles not loaded)
+    const roleNames: string[] = userWithRelations.roles ? userWithRelations.roles.map((r: any) => r.name) : [];
+    const primaryRole = roleNames[0] || userWithRelations.user_type || userType;
 
     // Generate JWT token
     const token = jwtService.sign({
@@ -186,19 +186,24 @@ export class AuthService {
       outlet_id: userWithRelations.outlet_id,
     });
 
-    // Return user data without password and with transformed roles
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: pwd, roles: rolesEntities, ...userBase } = userWithRelations as any;
-
-    return {
-      user: {
-        ...userBase,
-        roles: roleNames,
-        role: primaryRole,
-        user_type: primaryRole, // 🔥 Align user_type with primary role
-      },
-      token,
+    // Build response without exposing password
+    const userResponse = {
+      id: userWithRelations.id,
+      email: userWithRelations.email,
+      name: userWithRelations.name,
+      phone: userWithRelations.phone || undefined,
+      outlet_id: userWithRelations.outlet_id,
+      role: primaryRole,
+      roles: roleNames,
+      user_type: userWithRelations.user_type || primaryRole,
+      gender: userWithRelations.gender || undefined,
+      age: userWithRelations.age || undefined,
+      is_active: userWithRelations.is_active,
+      created_at: userWithRelations.created_at,
+      updated_at: userWithRelations.updated_at,
     };
+
+    return { user: userResponse, token };
   }
 
   /**

@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Check, X, Clock, Loader } from "lucide-react";
+import { Check, X, Clock, Loader, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useAttendance, useCheckIn, useCheckOut } from "@/hooks/useApi";
 
 const tt = {
@@ -37,10 +39,35 @@ const StatCardSkeleton = () => (
 
 const Attendance = () => {
   const [view, setView] = useState<"entry" | "analytics">("entry");
+  const [showFormModal, setShowFormModal] = useState(false);
   const { user } = useAuth();
   const { data: attendance, isLoading } = useAttendance(user?.outlet_id);
   const checkInMutation = useCheckIn();
   const checkOutMutation = useCheckOut();
+
+  const [attendanceForm, setAttendanceForm] = useState({
+    staff_name: "",
+    staff_id: "",
+    check_in_time: "",
+  });
+
+  const handleCheckInSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const checkInData = {
+      staff_name: attendanceForm.staff_name,
+      staff_id: attendanceForm.staff_id,
+      check_in_time: attendanceForm.check_in_time || new Date().toISOString(),
+      outlet_id: user?.outlet_id,
+    };
+
+    checkInMutation.mutateAsync(checkInData).then(() => {
+      setAttendanceForm({ staff_name: "", staff_id: "", check_in_time: "" });
+      setShowFormModal(false);
+    }).catch((error: any) => {
+      console.error('Check-in error:', error);
+      alert('Failed to check in: ' + (error?.message || 'Unknown error'));
+    });
+  };
 
   const staffList = attendance?.map((record: any) => ({
     name: record.staff_name,
@@ -62,20 +89,89 @@ const Attendance = () => {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-bold text-foreground">Attendance</h1>
-        <div className="flex gap-1 bg-secondary rounded-lg p-1">
-          {(["entry", "analytics"] as const).map((v) => (
+        <div className="flex gap-2 items-center">
+          {view === "entry" && (
             <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
-                view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
+              onClick={() => setShowFormModal(!showFormModal)}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex gap-1 items-center"
             >
-              {v === "entry" ? "Daily Entry" : "Analytics"}
+              <Plus className="w-4 h-4" /> Manual Entry
             </button>
-          ))}
+          )}
+          <div className="flex gap-1 bg-secondary rounded-lg p-1">
+            {(["entry", "analytics"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
+                  view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {v === "entry" ? "Daily Entry" : "Analytics"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* Manual Check-in Form */}
+      {showFormModal && view === "entry" && (
+        <form onSubmit={handleCheckInSubmit} className="glass-card p-5 space-y-4">
+          <h3 className="font-display text-lg font-semibold text-foreground">Manual Attendance Entry</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Outlet</Label>
+              <div className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground">
+                Navrangpura
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Staff ID/Name *</Label>
+              <Input
+                type="text"
+                placeholder="e.g. EMP001"
+                value={attendanceForm.staff_id}
+                onChange={(e) => setAttendanceForm({ ...attendanceForm, staff_id: e.target.value })}
+                className="bg-secondary border-border h-11"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Staff Name *</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Rajesh Kumar"
+                value={attendanceForm.staff_name}
+                onChange={(e) => setAttendanceForm({ ...attendanceForm, staff_name: e.target.value })}
+                className="bg-secondary border-border h-11"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Check In Time *</Label>
+              <Input
+                type="time"
+                value={attendanceForm.check_in_time}
+                onChange={(e) => setAttendanceForm({ ...attendanceForm, check_in_time: e.target.value })}
+                className="bg-secondary border-border h-11"
+                required
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-4">
+            <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              Record Check In
+            </Button>
+            <button
+              type="button"
+              onClick={() => setShowFormModal(false)}
+              className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-secondary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       {view === "entry" ? (
         <div className="glass-card p-5 overflow-x-auto">

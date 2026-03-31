@@ -1,12 +1,10 @@
-import { Controller, Post, Body, HttpException, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpException, HttpStatus, Request } from '@nestjs/common';
 import { AuthService, LoginResponse } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto, CustomerSignupDto, StaffSignupDto, AdminSignupDto } from './dto/signup.dto';
 import { ApiResponse } from '../../common/interfaces/api-response.interface';
 import { Public } from '../../common/decorators/public.decorator';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { RolesGuard } from '../../common/guards/roles.guard';
 
 /**
  * Authentication Controller
@@ -76,7 +74,6 @@ export class AuthController {
    * Staff signup
    * Protected endpoint - only admins can create staff accounts
    */
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('signup/staff')
   async signupStaff(
@@ -110,7 +107,6 @@ export class AuthController {
    * Admin signup
    * Protected endpoint - only super admins can create admin accounts
    */
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('signup/admin')
   async signupAdmin(
@@ -144,8 +140,7 @@ export class AuthController {
    * Verify token
    * Protected endpoint - verifies JWT token validity
    */
-  @UseGuards(JwtAuthGuard)
-  @Post('verify')
+  @Get('verify')
   async verify(@Request() req: any): Promise<ApiResponse> {
     return {
       status: 'success',
@@ -161,7 +156,6 @@ export class AuthController {
    * Refresh token
    * Protected endpoint - generates new JWT token
    */
-  @UseGuards(JwtAuthGuard)
   @Post('refresh')
   async refresh(@Request() req: any): Promise<ApiResponse> {
     try {
