@@ -1,5 +1,5 @@
 import { Controller, Post, Body, HttpException, HttpStatus, UseGuards, Request } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { AuthService, LoginResponse } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto, CustomerSignupDto, StaffSignupDto, AdminSignupDto } from './dto/signup.dto';
 import { ApiResponse } from '../../common/interfaces/api-response.interface';
@@ -25,14 +25,10 @@ export class AuthController {
    */
   @Public()
   @Post('login')
-  async login(@Body() loginDto: LoginDto): Promise<ApiResponse> {
+  async login(@Body() loginDto: LoginDto): Promise<LoginResponse> {
     try {
       const result = await this.authService.login(loginDto);
-      return {
-        status: 'success',
-        data: result,
-        timestamp: new Date().toISOString(),
-      };
+      return result; // ✅ Let ResponseInterceptor wrap it, don't wrap here
     } catch (error) {
       throw new HttpException(
         {
@@ -52,14 +48,10 @@ export class AuthController {
    */
   @Public()
   @Post('signup/customer')
-  async signupCustomer(@Body() signupDto: CustomerSignupDto): Promise<ApiResponse> {
+  async signupCustomer(@Body() signupDto: CustomerSignupDto): Promise<LoginResponse> {
     try {
       const result = await this.authService.signupCustomer(signupDto);
-      return {
-        status: 'success',
-        data: result,
-        timestamp: new Date().toISOString(),
-      };
+      return result; // ✅ Let ResponseInterceptor wrap it
     } catch (error) {
       const statusCode =
         error.status === 409 || error.message?.includes('already exists')
@@ -90,14 +82,10 @@ export class AuthController {
   async signupStaff(
     @Body() signupDto: StaffSignupDto,
     @Request() req: any,
-  ): Promise<ApiResponse> {
+  ): Promise<LoginResponse> {
     try {
       const result = await this.authService.signupStaff(signupDto, req.user.sub);
-      return {
-        status: 'success',
-        data: result,
-        timestamp: new Date().toISOString(),
-      };
+      return result; // ✅ Let ResponseInterceptor wrap it
     } catch (error) {
       const statusCode =
         error.status === 409 || error.message?.includes('already exists')
@@ -128,14 +116,10 @@ export class AuthController {
   async signupAdmin(
     @Body() signupDto: AdminSignupDto,
     @Request() req: any,
-  ): Promise<ApiResponse> {
+  ): Promise<LoginResponse> {
     try {
       const result = await this.authService.signupAdmin(signupDto, req.user.sub);
-      return {
-        status: 'success',
-        data: result,
-        timestamp: new Date().toISOString(),
-      };
+      return result; // ✅ Let ResponseInterceptor wrap it
     } catch (error) {
       const statusCode =
         error.status === 409 || error.message?.includes('already exists')

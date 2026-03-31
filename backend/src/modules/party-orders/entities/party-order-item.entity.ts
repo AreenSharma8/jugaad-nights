@@ -34,8 +34,8 @@ export class PartyOrderItem {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   total_price: number;
 
-  @Column({ type: 'uuid' })
-  created_by: string;
+  @Column({ type: 'uuid', nullable: true })
+  created_by: string | null;
 
   @CreateDateColumn()
   created_at: Date;

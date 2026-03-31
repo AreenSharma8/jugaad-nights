@@ -37,6 +37,31 @@ interface AuthProviderProps {
 }
 
 /**
+ * Helper: Transform API response to expected format
+ * Handles nested responses and role object→string conversion
+ */
+function transformAuthResponse(response: any): LoginResponse {
+  // Unwrap if response was nested by interceptor
+  let data = response;
+  if (response.data && response.data.user && response.data.token) {
+    data = response.data;
+  }
+
+  if (!data.user || !data.token) {
+    throw new Error('Invalid response structure');
+  }
+
+  // Transform roles from objects to strings if needed
+  if (Array.isArray(data.user.roles) && data.user.roles.length > 0) {
+    if (typeof data.user.roles[0] === 'object' && data.user.roles[0].name) {
+      data.user.roles = data.user.roles.map((r: any) => typeof r === 'string' ? r : r.name);
+    }
+  }
+
+  return data as LoginResponse;
+}
+
+/**
  * Authentication Provider Component
  */
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
@@ -85,13 +110,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
-      const response = await authApi.login({ email, password });
+      console.log('🔍 [AuthContext] Starting login with email:', email);
+      const apiResponse = await authApi.login({ email, password });
+      
+      console.log('🔍 [AuthContext] API response received:', apiResponse);
+
+      // Transform and validate response
+      const response = transformAuthResponse(apiResponse);
+      console.log('🔍 [AuthContext] Transformed response:', response);
 
       // Store in localStorage and state
+      console.log('🔍 [AuthContext] Calling authService.setAuth...');
       authService.setAuth(response);
+      
+      // Verify storage
+      const storedUserTest = authService.getUser();
+      console.log('🔍 [AuthContext] Verified storage:', storedUserTest);
+
       setToken(response.token);
       setUser(response.user);
+      
+      console.log('✅ [AuthContext] Login successful');
     } catch (err: any) {
+      console.error('❌ [AuthContext] login() error:', err);
       const errorMessage = err?.message || 'Login failed';
       setError(errorMessage);
       throw new Error(errorMessage);
@@ -108,7 +149,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
-      const response = await authApi.signupCustomer(credentials);
+      const apiResponse = await authApi.signupCustomer(credentials);
+      const response = transformAuthResponse(apiResponse);
 
       // Store in localStorage and state
       authService.setAuth(response);
@@ -131,7 +173,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
-      const response = await authApi.signupStaff(credentials);
+      const apiResponse = await authApi.signupStaff(credentials);
+      const response = transformAuthResponse(apiResponse);
 
       // Store in localStorage and state
       authService.setAuth(response);
@@ -154,7 +197,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
-      const response = await authApi.signupAdmin(credentials);
+      const apiResponse = await authApi.signupAdmin(credentials);
+      const response = transformAuthResponse(apiResponse);
 
       // Store in localStorage and state
       authService.setAuth(response);
@@ -190,21 +234,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * Check if user has specific role
    */
   const hasRole = useCallback((role: string): boolean => {
-    return user ? user.roles.includes(role) : false;
+    if (!user) return false;
+    // Check both roles array and primary role (fallback)
+    return user.roles.includes(role) || user.role === role;
   }, [user]);
 
   /**
    * Check if user has any of the specified roles
    */
   const hasAnyRole = useCallback((roles: string[]): boolean => {
-    return user ? roles.some((role) => user.roles.includes(role)) : false;
+    if (!user) return false;
+    // Check if any role matches in roles array OR matches primary role
+    return roles.some((role) => user.roles.includes(role) || user.role === role);
   }, [user]);
 
   /**
    * Check if user has all specified roles
    */
   const hasAllRoles = useCallback((roles: string[]): boolean => {
-    return user ? roles.every((role) => user.roles.includes(role)) : false;
+    if (!user) return false;
+    // Check if all roles exist in roles array OR all match primary role (for single role)
+    return roles.every((role) => user.roles.includes(role) || user.role === role);
   }, [user]);
 
   /**

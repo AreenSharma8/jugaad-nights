@@ -34,8 +34,8 @@ export class StockTransaction {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
-  @Column({ type: 'uuid' })
-  created_by: string;
+  @Column({ type: 'uuid', nullable: true })
+  created_by: string | null;
 
   @CreateDateColumn()
   created_at: Date;

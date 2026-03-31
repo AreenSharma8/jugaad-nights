@@ -4,7 +4,7 @@ import { Check, X, Clock, Loader } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useAttendance, useCheckIn, useCheckOut } from "@/hooks/useApi";
 
 const tt = {

@@ -47,8 +47,12 @@ async function makeRequest<T = any>(
     ...options.headers,
   };
 
+  // Always include Authorization header if token exists
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    console.log('📡 [API] Sending request with token:', endpoint);
+  } else {
+    console.warn('⚠️ [API] No token found in localStorage for request:', endpoint);
   }
 
   try {

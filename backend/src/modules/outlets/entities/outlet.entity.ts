@@ -32,11 +32,11 @@ export class Outlet {
   @OneToOne(() => OutletConfig, (config) => config.outlet, { eager: true })
   config: OutletConfig;
 
-  @Column({ type: 'uuid' })
-  created_by: string;
+  @Column({ type: 'uuid', nullable: true })
+  created_by: string | null;
 
   @Column({ type: 'uuid', nullable: true })
-  updated_by: string;
+  updated_by: string | null;
 
   @CreateDateColumn()
   created_at: Date;

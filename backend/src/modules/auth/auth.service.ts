@@ -7,7 +7,22 @@ import { UserRepository } from '../users/repositories/user.repository';
 import { User } from '../users/entities/user.entity';
 
 export interface LoginResponse {
-  user: Partial<User>;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    phone?: string | null;
+    outlet_id: string;
+    role: string;
+    roles: string[];
+    user_type: string;
+    gender?: string | null;
+    age?: number | null;
+    department?: string;
+    is_active?: boolean;
+    created_at?: Date;
+    updated_at?: Date;
+  };
   token: string;
   refreshToken?: string;
 }
@@ -54,21 +69,28 @@ export class AuthService {
 
     // Get role names for JWT
     const roleNames = user.roles?.map((r) => r.name) || [];
+    const primaryRole = roleNames[0] || 'customer';
 
     // Generate JWT token
     const token = jwtService.sign({
       sub: user.id,
       email: user.email,
-      role: roleNames[0] || 'customer', // Primary role
+      role: primaryRole,
       roles: roleNames,
       outlet_id: user.outlet_id,
     });
 
-    // Return user data without password
-    const { password: _, ...userWithoutPassword } = user;
+    // Return user data without password and with transformed roles
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: pwd, roles: rolesEntities, ...userBase } = user;
 
     return {
-      user: userWithoutPassword,
+      user: {
+        ...userBase,
+        roles: roleNames,
+        role: primaryRole,
+        user_type: primaryRole, // 🔥 Align user_type with primary role
+      },
       token,
     };
   }
@@ -153,21 +175,28 @@ export class AuthService {
 
     // Get role names
     const roleNames = userWithRelations.roles?.map((r) => r.name) || [];
+    const primaryRole = roleNames[0] || userType;
 
     // Generate JWT token
     const token = jwtService.sign({
       sub: userWithRelations.id,
       email: userWithRelations.email,
-      role: roleNames[0] || userType,
+      role: primaryRole,
       roles: roleNames,
       outlet_id: userWithRelations.outlet_id,
     });
 
-    // Return user data without password
-    const { password: _, ...userWithoutPassword } = userWithRelations as any;
+    // Return user data without password and with transformed roles
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: pwd, roles: rolesEntities, ...userBase } = userWithRelations as any;
 
     return {
-      user: userWithoutPassword,
+      user: {
+        ...userBase,
+        roles: roleNames,
+        role: primaryRole,
+        user_type: primaryRole, // 🔥 Align user_type with primary role
+      },
       token,
     };
   }

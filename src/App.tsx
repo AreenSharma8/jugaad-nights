@@ -34,10 +34,17 @@ const queryClient = new QueryClient();
 
 // Component to handle role-based routing
 const RoleBasedRouter = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -46,59 +53,37 @@ const RoleBasedRouter = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 
-      {/* Admin routes */}
-      {user?.user_type === 'admin' && (
-        <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="wastage" element={<AdminWastage />} />
-          <Route path="inventory" element={<AdminInventory />} />
-        </Route>
-      )}
+      {/* Redirect admin and staff to dashboard with role-based limitations */}
+      <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/admin/wastage" element={<Navigate to="/dashboard/wastage" replace />} />
+      <Route path="/admin/inventory" element={<Navigate to="/dashboard/inventory" replace />} />
+      
+      <Route path="/staff" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/staff/wastage" element={<Navigate to="/dashboard/wastage" replace />} />
+      <Route path="/staff/inventory" element={<Navigate to="/dashboard/inventory" replace />} />
 
-      {/* Staff routes */}
-      {user?.user_type === 'staff' && (
-        <Route path="/staff" element={<ProtectedRoute><StaffDashboard /></ProtectedRoute>}>
-          <Route index element={<StaffDashboard />} />
-          <Route path="wastage" element={<StaffWastage />} />
-          <Route path="inventory" element={<StaffInventory />} />
-        </Route>
-      )}
-
-      {/* Customer/Default dashboard routes */}
-      {user?.user_type === 'customer' && (
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <DashboardLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Dashboard />} />
-          <Route path="sales" element={<Sales />} />
-          <Route path="inventory" element={<Inventory />} />
-          <Route path="wastage" element={<Wastage />} />
-          <Route path="purchase-orders" element={<PurchaseOrders />} />
-          <Route path="party-orders" element={<PartyOrders />} />
-          <Route path="festivals" element={<Festivals />} />
-          <Route path="cashflow" element={<Cashflow />} />
-          <Route path="attendance" element={<Attendance />} />
-        </Route>
-      )}
-
-      {/* Fallback redirects */}
+      {/* Customer/Default dashboard routes - Always rendered, access controlled by ProtectedRoute */}
       <Route 
-        path="/" 
+        path="/dashboard" 
         element={
-          user 
-            ? user.user_type === 'admin' 
-              ? <Navigate to="/admin" />
-              : user.user_type === 'staff'
-              ? <Navigate to="/staff" />
-              : <Navigate to="/dashboard" />
-            : <Navigate to="/login" />
-        } 
-      />
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route path="sales" element={<Sales />} />
+        <Route path="inventory" element={<Inventory />} />
+        <Route path="wastage" element={<Wastage />} />
+        <Route path="purchase-orders" element={<PurchaseOrders />} />
+        <Route path="party-orders" element={<PartyOrders />} />
+        <Route path="festivals" element={<Festivals />} />
+        <Route path="cashflow" element={<Cashflow />} />
+        <Route path="attendance" element={<Attendance />} />
+      </Route>
+
+      {/* Root route - just render login, let login handle navigation */}
+      <Route path="/" element={<Login />} />
       
       {/* Not found */}
       <Route path="*" element={<NotFound />} />
@@ -112,7 +97,7 @@ const App = () => (
       <AuthProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <RoleBasedRouter />
         </BrowserRouter>
       </AuthProvider>

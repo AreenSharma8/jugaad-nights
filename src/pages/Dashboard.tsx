@@ -8,7 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
 } from "recharts";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useDashboardMetrics, useSalesTrendAnalytics, useLowStockItems, useOutletComparison } from "@/hooks/useApi";
 
 const chartTooltipStyle = {

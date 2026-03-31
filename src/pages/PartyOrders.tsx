@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { FileText, Plus, Download, CheckCircle, Clock, Loader } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { usePartyOrders, useUpdatePartyOrderStatus } from "@/hooks/useApi";
 
 const SkeletonRow = () => (

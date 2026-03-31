@@ -49,11 +49,11 @@ export class Report {
   @Column('json', { nullable: true })
   metadata: Record<string, any>;
 
-  @Column('uuid')
-  created_by: string;
+  @Column('uuid', { nullable: true })
+  created_by: string | null;
 
   @Column('uuid', { nullable: true })
-  updated_by: string;
+  updated_by: string | null;
 
   @CreateDateColumn()
   created_at: Date;

@@ -3,7 +3,7 @@ import {
   BarChart, Bar
 } from "recharts";
 import { TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight, Loader } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCashFlow, useCashFlowSummary } from "@/hooks/useApi";
 
 const tt = {

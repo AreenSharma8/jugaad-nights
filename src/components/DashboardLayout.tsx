@@ -6,6 +6,7 @@ import {
   Bell
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
@@ -19,10 +20,29 @@ const navItems = [
   { title: "Attendance", icon: Users, path: "/dashboard/attendance" },
 ];
 
+// Role-based accessible features
+const roleAccessMap: Record<string, string[]> = {
+  admin: ["/dashboard", "/dashboard/sales", "/dashboard/inventory", "/dashboard/wastage", "/dashboard/purchase-orders", "/dashboard/party-orders", "/dashboard/festivals", "/dashboard/cashflow", "/dashboard/attendance"],
+  staff: ["/dashboard", "/dashboard/sales", "/dashboard/inventory", "/dashboard/wastage", "/dashboard/party-orders", "/dashboard/cashflow", "/dashboard/attendance"],
+  customer: ["/dashboard", "/dashboard/sales", "/dashboard/inventory", "/dashboard/party-orders"],
+};
+
 const DashboardLayout = () => {
+  const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+
+  // Get accessible nav items based on user role
+  const getUserRole = () => {
+    if (user?.roles?.includes("admin")) return "admin";
+    if (user?.roles?.includes("staff")) return "staff";
+    return "customer";
+  };
+
+  const userRole = getUserRole();
+  const accessiblePaths = roleAccessMap[userRole] || roleAccessMap.customer;
+  const accessibleNavItems = navItems.filter(item => accessiblePaths.includes(item.path));
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -57,7 +77,7 @@ const DashboardLayout = () => {
 
         {/* Nav */}
         <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {accessibleNavItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link
@@ -116,7 +136,7 @@ const DashboardLayout = () => {
 
           <div className="hidden lg:block">
             <h2 className="text-sm font-medium text-muted-foreground">
-              {navItems.find((i) => i.path === location.pathname)?.title || "Dashboard"}
+              {accessibleNavItems.find((i) => i.path === location.pathname)?.title || "Dashboard"}
             </h2>
           </div>
 
@@ -125,8 +145,8 @@ const DashboardLayout = () => {
               <Bell className="w-5 h-5" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
             </button>
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary">
-              A
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary" title={`${userRole.charAt(0).toUpperCase() + userRole.slice(1)}`}>
+              {user?.name?.charAt(0).toUpperCase() || "A"}
             </div>
           </div>
         </header>

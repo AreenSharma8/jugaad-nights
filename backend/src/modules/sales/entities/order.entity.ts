@@ -47,8 +47,8 @@ export class Order {
   @ManyToOne(() => Outlet, { eager: true })
   outlet: Outlet;
 
-  @Column({ type: 'uuid' })
-  created_by: string;
+  @Column({ type: 'uuid', nullable: true })
+  created_by: string | null;
 
   @Column({ type: 'uuid', nullable: true })
   updated_by: string;
