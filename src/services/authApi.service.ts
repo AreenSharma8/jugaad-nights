@@ -93,6 +93,11 @@ export const authApi = {
       return false;
     }
   },
-};
 
-export default authApi;
+  /**
+   * Get current authenticated user data
+   */
+  getCurrentUser: async (): Promise<LoginResponse> => {
+    return apiClient.get<LoginResponse>('/auth/me');
+  },
+};

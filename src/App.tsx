@@ -20,12 +20,6 @@ import Cashflow from "./pages/Cashflow";
 import Attendance from "./pages/Attendance";
 import NotFound from "./pages/NotFound";
 
-// Admin Pages (to be created)
-import AdminDashboard from "./pages/AdminDashboard";
-
-// Staff Pages (to be created)
-import StaffDashboard from "./pages/StaffDashboard";
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -85,24 +79,25 @@ const RootRoute = () => {
    * - Redirect loops
    * - Unauthorized dashboard access
    */
-  return isAuthenticated ? (
-    <Navigate to="/dashboard" replace />
-  ) : (
-    <Login />
-  );
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <Login />;
 };
 
 const DashboardByRole = () => {
-  const { user } = useAuth();
-
-  if (user?.roles?.includes("admin")) {
-    return <AdminDashboard />;
-  }
-
-  if (user?.roles?.includes("staff")) {
-    return <StaffDashboard />;
-  }
-
+  // ========== UNIFIED DASHBOARD FOR ALL ROLES ==========
+  // All user roles (admin, staff, customer) access the same Dashboard component
+  // Role-based access control is handled by:
+  // 1. DashboardLayout.tsx - Controls visible menu items based on user role
+  // 2. Individual page components - Enforce access permissions internally
+  // 
+  // This approach ensures:
+  // - Single source of truth for dashboard UI
+  // - Consistent user experience across roles
+  // - Easier maintenance and feature updates
+  // - Role-based menu filtering at layout level
   return <Dashboard />;
 };
 

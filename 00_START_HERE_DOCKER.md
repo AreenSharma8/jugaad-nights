@@ -1,102 +1,92 @@
-# 🎉 Docker Production Setup - COMPLETE
+# 🐳 Docker Quick Start - Start Here!
 
-**Jugaad Nights Backend - Fully Containerized & Ready to Deploy**
+**Jugaad Nights - Complete Docker Setup**
 
-**Status:** ✅ **PRODUCTION READY**  
-**Date:** March 31, 2026  
-**All Components:** Verified and Tested ✅
+**Status:** ✅ **FULLY OPERATIONAL**
 
 ---
 
-## 📋 Final Checklist - Everything Complete
-
-### ✅ Configuration Files
-- [x] `docker-compose.yml` - Production orchestration (uses bridge network, health checks, proper dependencies)
-- [x] `backend/Dockerfile` - Enhanced with security (non-root user, signal handling, dumb-init)
-- [x] `backend/.env` - Updated with Docker service names (`postgres`, `redis`)
-- [x] `backend/.env.example` - Template for reference
-- [x] `backend/.dockerignore` - Build optimization (excludes dev dependencies)
-- [x] `frontend/.env` - Configured to use Docker backend
-
-### ✅ Documentation Created
-- [x] `DOCKER_PRODUCTION_SETUP.md` (600+ lines)
-- [x] `DOCKER_QUICK_START.md` (180+ lines) 
-- [x] `DOCKER_COMPLETE_REFERENCE.md` (500+ lines)
-- [x] `DOCKER_COMMANDS_REFERENCE.md` (400+ lines)
-- [x] `DOCKER_IMPLEMENTATION_COMPLETE.md` (This summary)
-
-### ✅ Enhancements Applied
-- [x] Dockerfile: Non-root user (nestjs:1001)
-- [x] Dockerfile: dumb-init for proper PID 1 handling
-- [x] Dockerfile: Build dependencies included
-- [x] Dockerfile: Health check using curl
-- [x] Services: All 3 have health checks
-- [x] Services: Backend waits for DB & Redis
-- [x] Network: Bridge network for service discovery
-- [x] Volumes: Persistent data for PostgreSQL and Redis
-
----
-
-## 🚀 Quick Start (Copy & Paste)
+## 🚀 Quick Start (30 Seconds)
 
 ```bash
-# 1. Navigate to project
-cd c:\Users\AREEN\ PIHU\ SHARMA\OneDrive\Desktop\jugaad-nights
+# Navigate to project directory
+cd jugaad-nights
 
-# 2. Clean up old containers
-docker-compose down -v
+# Start everything automatically
+./start.sh
 
-# 3. Start all services (wait ~45 seconds)
+# OR manually start
 docker-compose up --build
-
-# 4. In another terminal, verify
-docker ps --format "table {{.Names}}\t{{.Status}}"
-
-# 5. Test API
-curl http://localhost:3000/api/health
 ```
 
-**Expected Output:**
+**Services Running:**
+- ✅ Frontend: http://localhost:8080
+- ✅ Backend: http://localhost:3000
+- ✅ API Docs: http://localhost:3000/api/docs
+- ✅ PostgreSQL: localhost:5432
+- ✅ Redis: localhost:6379
+
+---
+
+## 📋 Complete Setup Steps
+
+### Step 1: Start Services
+```bash
+./start.sh
+# Services starting... wait for health checks to pass
 ```
-NAMES                STATUS                   PORTS
-jugaad-postgres      Up 1 min (healthy)       0.0.0.0:5432->5432/tcp
-jugaad-redis         Up 1 min (healthy)       0.0.0.0:6379->6379/tcp
-jugaad-backend       Up 45 seconds (healthy)  0.0.0.0:3000->3000/tcp
+
+### Step 2: Wait for Database Health
+```bash
+# Check health status
+docker-compose ps
+
+# Should show (healthy) for all services:
+# - postgres (healthy)
+# - redis (healthy)  
+# - backend (healthy)
+```
+
+### Step 3: Run Database Migrations
+```bash
+# Apply TypeORM migrations (creates database schema)
+docker-compose exec backend npm run migration:run
+
+# Verify migrations applied
+docker-compose exec backend npm run migration:show
+```
+
+### Step 4: Access Application
+```
+Frontend: http://localhost:8080
+API Documentation: http://localhost:3000/api/docs
 ```
 
 ---
 
-## 📊 What's Running
+## 🗄️ Database Migrations
 
-### Three-Tier Architecture
+**TypeORM Migrations** (Node.js equivalent of SQLAlchemy + Alembic):
 
-```
-┌────────────────────────────────────────┐
-│    Docker Network: jugaad-network      │
-│                                        │
-│  ┌──────────────┐  ┌──────────────┐   │
-│  │ PostgreSQL   │  │    Redis     │   │
-│  │ 16-alpine    │  │  7-alpine    │   │
-│  │ :5432        │  │  :6379       │   │
-│  └──────────────┘  └──────────────┘   │
-│         ▲                  ▲           │
-│         │ postgres:5432    │ redis:6379
-│         └──────────────────┘           │
-│              │                         │
-│         ┌────▼────┐                    │
-│         │ NestJS  │                    │
-│         │ Backend │                    │
-│         │ :3000   │                    │
-│         └────┬────┘                    │
-│              │                         │
-└──────────────┼────────────────────────┘
-               │
-               ▼
-        Host Machine
-    http://localhost:3000
+```bash
+# View pending migrations
+docker-compose exec backend npm run migration:show
+
+# Apply migrations
+docker-compose exec backend npm run migration:run
+
+# Revert last migration
+docker-compose exec backend npm run migration:revert
+
+# Generate new migration after entity changes
+docker-compose exec backend npm run migration:generate -- -n NewMigrationName
 ```
 
-### Service Details
+**More Details:** [TYPEORM_QUICK_START_MIGRATIONS.md](./TYPEORM_QUICK_START_MIGRATIONS.md)
+
+---
+
+## 📊 Service Architecture
 
 | Service | Image | Port | Hostname | Status |
 |---------|-------|------|----------|--------|

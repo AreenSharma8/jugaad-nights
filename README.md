@@ -11,7 +11,10 @@ A production-ready application for managing restaurant operations including sale
 | Document | Purpose |
 |----------|---------|
 | [SETUP.md](./SETUP.md) | Project setup and installation guide |
-| [BACKEND_API_DOCUMENTATION.md](./BACKEND_API_DOCUMENTATION.md) | Complete API reference (50+ endpoints) |
+| [00_START_HERE_DOCKER.md](./00_START_HERE_DOCKER.md) | Docker quick start (recommended) |
+| [TYPEORM_QUICK_START_MIGRATIONS.md](./TYPEORM_QUICK_START_MIGRATIONS.md) | Database migrations guide |
+| [SOLUTION_SUMMARY_TYPEORM_ALEMBIC_EQUIVALENT.md](./SOLUTION_SUMMARY_TYPEORM_ALEMBIC_EQUIVALENT.md) | TypeORM equivalent of SQLAlchemy + Alembic |
+| [backend/API_DOCUMENTATION.md](./backend/API_DOCUMENTATION.md) | Complete API reference (50+ endpoints) |
 | [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) | Production deployment instructions |
 | [IMPLEMENTATION_DOCS/](./IMPLEMENTATION_DOCS/) | Detailed module implementation details |
 

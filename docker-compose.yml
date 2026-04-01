@@ -1,62 +1,146 @@
+# ============================================================================
+# JUGAAD NIGHTS - DOCKER COMPOSE CONFIGURATION
+# ============================================================================
+# This configuration sets up the complete application stack:
+# - PostgreSQL: Primary database with persistent volumes
+# - Redis: Caching and queue management
+# - Backend (NestJS): API server with database migrations
+# - Frontend (React/Vite): Web application served on port 8080
+#
+# TROUBLESHOOTING:
+# If you get "unable to get image" errors:
+# 1. Restart Docker Desktop completely
+# 2. Run: docker system prune -a
+# 3. Ensure 8GB+ RAM allocated to Docker Desktop
+# 4. Try: docker-compose up -d (without --build)
+# ============================================================================
+
 services:
+  # =========================================================================
+  # DATABASE SERVICE - PostgreSQL 16
+  # =========================================================================
+  # Persistent relational database for all application data.
+  # Uses Alpine Linux for minimal image size.
+  # =========================================================================
   postgres:
     image: postgres:16-alpine
     container_name: jugaad-postgres
+    restart: always
     environment:
+      # Database credentials
       POSTGRES_DB: jugaad_nights
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      # PostgreSQL configuration for better performance
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+      # Enable pg_stat_statements for query monitoring
+      POSTGRES_HOST_AUTH_METHOD: md5
     ports:
       - "5432:5432"
     volumes:
+      # Primary data volume for database persistence
       - postgres_data:/var/lib/postgresql/data
+      # Initialization scripts (run .sql files in this directory)
+      - ./backend/scripts/db-init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jugaad_nights"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - jugaad-network
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
 
+  # =========================================================================
+  # CACHE SERVICE - Redis 7
+  # =========================================================================
+  # In-memory data store for caching, sessions, and job queues (BullMQ).
+  # Used for real-time features and performance optimization.
+  # =========================================================================
   redis:
     image: redis:7-alpine
     container_name: jugaad-redis
+    restart: always
     ports:
       - "6379:6379"
+    volumes:
+      # Redis data persistence (AOF - Append Only File)
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - jugaad-network
+    command: redis-server --appendonly yes --appendfsync everysec
 
+  # =========================================================================
+  # BACKEND SERVICE - NestJS API Server
+  # =========================================================================
+  # Main application server handling all business logic, database operations,
+  # and API endpoints. Built with NestJS framework and TypeORM ORM.
+  # =========================================================================
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: development
+      args:
+        # Build arguments for Docker builder
+        NODE_ENV: development
     container_name: jugaad-nights-backend
+    restart: always
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
+      # ====== DATABASE CONFIGURATION ======
+      DB_TYPE: postgres
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: jugaad_nights
+      DB_LOGGING: "true"
+      
+      # ====== REDIS CONFIGURATION ======
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      
+      # ====== APPLICATION CONFIGURATION ======
       NODE_ENV: development
       PORT: 3000
+      APP_PORT: 3000
+      
+      # ====== API CONFIGURATION ======
       API_URL: http://localhost:3000
       API_PREFIX: /api
-      CORS_ORIGIN: "*"
+      FRONTEND_URL: http://localhost:8080
+      CORS_ORIGIN: "http://localhost:8080,http://localhost:3000,http://127.0.0.1:8080"
+      
+      # ====== LOGGING AND DEBUGGING ======
       LOG_LEVEL: debug
+      IN_DOCKER: "true"
+      
+      # ====== AUTHENTICATION ======
+      JWT_SECRET: your-secret-key-change-in-production
+      JWT_EXPIRATION: 24h
+      REFRESH_TOKEN_EXPIRATION: 7d
     ports:
       - "3000:3000"
+    volumes:
+      # Mount source code for hot-reload in development
+      - ./backend/src:/app/src
     networks:
       - jugaad-network
     healthcheck:
@@ -65,10 +149,70 @@ services:
       timeout: 10s
       start_period: 90s
       retries: 5
+    command: npm run start:dev
 
+  # =========================================================================
+  # FRONTEND SERVICE - React/Vite Web Application
+  # =========================================================================
+  # User-facing web application built with React, Vite, and shadcn/ui.
+  # Communicates with backend API on port 3000 through nginx proxy on port 80.
+  # 
+  # API URL RESOLUTION:
+  # - Frontend served by nginx on port 80
+  # - Frontend JavaScript requests go to /api
+  # - Nginx intercepts /api and proxies to backend:3000 (Docker DNS resolution)
+  # - No CORS issues because requests appear same-origin to browser
+  # =========================================================================
+  frontend:
+    build:
+      context: ./
+      dockerfile: Dockerfile.frontend
+      args:
+        # Use relative path /api - nginx will proxy to backend:3000/api
+        # This works in Docker because nginx proxies the request
+        VITE_API_URL: /api
+        VITE_API_BASE_URL: /api
+        NODE_ENV: production
+    container_name: jugaad-nights-frontend
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    networks:
+      - jugaad-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ || exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# ============================================================================
+# VOLUMES - Data Persistence
+# ============================================================================
+# Named volumes for persistent data storage across container restarts.
+# Volume data is stored in Docker's managed directory on the host.
+# ============================================================================
 volumes:
+  # PostgreSQL data volume - persists all database files
   postgres_data:
+    driver: local
+  
+  # Redis data volume - persists cached data
+  redis_data:
+    driver: local
 
+# ============================================================================
+# NETWORKS - Service Communication
+# ============================================================================
+# Custom bridge network enabling service-to-service communication using
+# service names (e.g., 'postgres', 'redis') as hostnames.
+# ============================================================================
 networks:
   jugaad-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -11,7 +11,6 @@
 import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { authService, authApi, type User, type LoginResponse } from '@/services';
 import type { CustomerSignupCredentials, StaffSignupCredentials, AdminSignupCredentials } from '@/services/authApi.service';
-import axiosApiClient from '@/lib/api';
 
 export interface AuthContextType {
   // State
@@ -92,29 +91,95 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * CRITICAL: Initialize auth state from localStorage with strict validation
+   * CRITICAL: Initialize auth state from localStorage OR URL token with strict validation
    * 
    * Flow:
-   * 1. Get stored token and user from localStorage
-   * 2. ONLY if token exists: verify it's still valid via backend
-   * 3. If valid: set BOTH token and user atomically
-   * 4. If invalid/expired: clear localStorage completely
-   * 5. Handle corrupted data gracefully
+   * 1. Check for token in URL (for deeplinks from auth system)
+   * 2. Get stored token and user from localStorage
+   * 3. ONLY if token exists: verify it's still valid via backend
+   * 4. If valid: set BOTH token and user atomically
+   * 5. If invalid/expired: clear localStorage completely
+   * 6. Handle corrupted data gracefully
    * 
    * Why this is important:
    * - Prevents redirect loops (forces /dashboard on invalid token)
    * - Prevents unauthorized access (stale token treated as valid)
    * - Handles corrupted localStorage gracefully
    * - Ensures atomic state (no partial login)
+   * - Supports external auth systems passing tokens via URL
    */
   useEffect(() => {
     const initializeAuth = async () => {
       try {
         setIsLoading(true);
         
+        // Step 0: Check for token in URL query parameter (from external auth system)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        
+        if (urlToken) {
+          console.log('🔐 [Auth Init] Found token in URL, attempting to use it...');
+          try {
+            // Temporarily set the token so API calls can use it
+            localStorage.setItem('auth_token', urlToken);
+            
+            // Verify the token is valid AND get user data
+            console.log('🔐 [Auth Init] Verifying URL token and fetching user data...');
+            const userResponse = await authApi.getCurrentUser();
+            
+            let verifiedUser: any = null;
+            
+            // Handle different response formats
+            if (userResponse && userResponse.user) {
+              verifiedUser = userResponse.user;
+            } else if (userResponse && userResponse.data && userResponse.data.user) {
+              verifiedUser = userResponse.data.user;
+            } else if (userResponse && typeof userResponse === 'object') {
+              // Check if the response itself is a user object
+              if (userResponse.id && userResponse.email) {
+                verifiedUser = userResponse;
+              }
+            }
+            
+            if (!verifiedUser) {
+              throw new Error('No user data in response');
+            }
+            
+            // Validate user structure
+            if (!isValidUser(verifiedUser)) {
+              console.warn('⚠️ [Auth Init] User data from URL token is invalid');
+              throw new Error('Invalid user data structure');
+            }
+            
+            // Save to localStorage and set state atomically
+            authService.setAuth({ token: urlToken, user: verifiedUser });
+            console.log('✅ [Auth Init] URL token verified successfully');
+            setToken(urlToken);
+            setUser(verifiedUser);
+            
+            // Clear token from URL to clean up browser history
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            return; // Success - don't continue to localStorage check
+          } catch (error) {
+            // URL token is invalid - clear it and continue
+            console.warn('⚠️ [Auth Init] URL token verification failed:', error);
+            localStorage.removeItem('auth_token');
+            authService.clearAuth();
+            setToken(null);
+            setUser(null);
+            // Continue to check localStorage
+          }
+        }
+        
         // Step 1: Get stored credentials from localStorage
         const storedToken = authService.getToken();
         const storedUser = authService.getUser();
+
+        console.log('🔐 [Auth Init] Checking stored credentials...', {
+          hasToken: !!storedToken,
+          hasUser: !!storedUser,
+        });
 
         // Step 2: If token exists, verify it's still valid
         if (storedToken && storedUser) {
@@ -131,45 +196,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
             // Call backend to verify token is still valid
             // This is REQUIRED - don't trust localStorage alone
-            await authApi.verifyToken();
+            console.log('🔐 [Auth Init] Verifying token with backend...');
+            const isValid = await authApi.verifyToken();
+            
+            if (!isValid) {
+              throw new Error('Token verification failed');
+            }
 
             // Step 3: Token is valid, set state ATOMICALLY (together)
             // This prevents React rendering partial auth state
+            console.log('✅ [Auth Init] Token verified successfully');
             setToken(storedToken);
             setUser(storedUser);
-            axiosApiClient.setAuthToken(storedToken);
           } catch (error) {
             // Step 4: Token is invalid/expired, clear all auth data
             // This prevents unauthorized access with stale tokens
-            console.warn('⚠️ Token validation failed, clearing auth state');
+            console.warn('⚠️ [Auth Init] Token validation failed, clearing auth state', error);
             authService.clearAuth();
             setToken(null);
             setUser(null);
-            axiosApiClient.setAuthToken('');
           }
+        } else {
+          // No stored credentials - user not logged in
+          console.log('ℹ️ [Auth Init] No stored credentials found - user will see login');
         }
         // If no stored token, user starts in logged-out state (nothing to do)
       } catch (error) {
         // Step 5: Unexpected error during initialization
         // Log and continue - app stays in logged-out state
-        console.error('❌ Auth initialization failed:', error);
+        console.error('❌ [Auth Init] Auth initialization failed:', error);
         authService.clearAuth();
         setToken(null);
         setUser(null);
-        axiosApiClient.setAuthToken('');
       } finally {
         // Initialization complete - allow app to render
+        console.log('🎉 [Auth Init] Auth initialization complete');
         setIsLoading(false);
       }
     };
 
     initializeAuth();
   }, []);
-
-  // Keep Axios client in sync with auth state used by fetch-based auth client.
-  useEffect(() => {
-    axiosApiClient.setAuthToken(token || '');
-  }, [token]);
 
   /**
    * Login handler - ATOMIC STATE UPDATE
@@ -189,7 +256,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       authService.setAuth(response);
       setToken(response.token);
       setUser(response.user);
-      axiosApiClient.setAuthToken(response.token);
     } catch (err: any) {
       const errorMessage = err?.message || 'Login failed';
       setError(errorMessage);
@@ -214,7 +280,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       authService.setAuth(response);
       setToken(response.token);
       setUser(response.user);
-      axiosApiClient.setAuthToken(response.token);
     } catch (err: any) {
       const errorMessage = err?.message || 'Customer signup failed';
       setError(errorMessage);
@@ -239,7 +304,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       authService.setAuth(response);
       setToken(response.token);
       setUser(response.user);
-      axiosApiClient.setAuthToken(response.token);
     } catch (err: any) {
       const errorMessage = err?.message || 'Staff signup failed';
       setError(errorMessage);
@@ -264,7 +328,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       authService.setAuth(response);
       setToken(response.token);
       setUser(response.user);
-      axiosApiClient.setAuthToken(response.token);
     } catch (err: any) {
       const errorMessage = err?.message || 'Admin signup failed';
       setError(errorMessage);
@@ -284,7 +347,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(null);
     setUser(null);
     setError(null);
-    axiosApiClient.setAuthToken('');
   }, []);
 
   /**

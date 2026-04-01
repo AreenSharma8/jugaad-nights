@@ -1,103 +1,85 @@
-# Quick Reference Guide - Authentication & RBAC System
+# Quick Reference Guide - Commands & Setup
 
-**Last Updated:** March 25, 2026  
-**Version:** 2.0.0 (JWT Authentication & RBAC)
+**Last Updated:** April 1, 2026  
+**Version:** 3.0.0 (TypeORM Migrations + Docker)
 
 ---
 
-## 🚀 Quick Start Commands
+## 🚀 Startup Commands
 
-### Start Backend
+### Option A: Docker (All-in-One - Recommended)
 ```bash
+./start.sh
+# or
+docker-compose up --build
+```
+
+### Option B: Local Development
+```bash
+# Terminal 1: Database & Cache
+docker-compose up postgres redis -d
+
+# Terminal 2: Backend
 cd backend
 npm install
-npm run start:dev
-# Opens at http://localhost:3000/api
-```
+npm run build
+npm run migration:run  # Apply database schema
+npm run start:dev     # http://localhost:3000
 
-### Start Frontend
-```bash
+# Terminal 3: Frontend
 npm install
-npm run dev
-# Opens at http://localhost:8080
+npm run dev          # http://localhost:8080
 ```
 
 ---
 
-## 📝 Creating Test Accounts
+## 🗄️ Database Migrations (TypeORM)
 
-### Create Customer (Public Signup)
+**TypeORM = SQLAlchemy + Alembic for Node.js**
+
+### Common Commands
 ```bash
-# Via UI: http://localhost:8080/signup
-# Or via cURL:
-curl -X POST http://localhost:3000/api/auth/signup/customer \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "customer@test.com",
-    "password": "TestPass123!",
-    "name": "Customer Name"
-  }'
+cd backend
+
+# View migration status
+npm run migration:show
+
+# Apply pending migrations
+npm run migration:run
+
+# Rollback last migration
+npm run migration:revert
+
+# Generate migration after entity change
+npm run migration:generate -- -n DescriptiveFieldName
+
+# Build project first before any migration command
+npm run build
 ```
 
-### Create Staff (Admin Only)
+### Docker Migrations
 ```bash
-# Via Admin UI: Admin Dashboard → Add Staff
-# Or via cURL:
-curl -X POST http://localhost:3000/api/auth/signup/staff \
-  -H "Authorization: Bearer <admin-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "staff@test.com",
-    "password": "StaffPass123!",
-    "name": "Staff Name",
-    "department": "kitchen"
-  }'
-```
-
-### Create Admin (Admin Only)
-```bash
-curl -X POST http://localhost:3000/api/auth/signup/admin \
-  -H "Authorization: Bearer <admin-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin2@test.com",
-    "password": "AdminPass123!",
-    "name": "Admin Name"
-  }'
+# With Docker Compose running:
+docker-compose exec backend npm run migration:run
+docker-compose exec backend npm run migration:show
 ```
 
 ---
 
-## 🔐 Password Requirements
+## 🌐 Service URLs
 
-- **Minimum Length:** 8 characters
-- **Lowercase:** At least 1 (a-z)
-- **Uppercase:** At least 1 (A-Z)
-- **Number:** At least 1 (0-9)
-- **Special Character:** At least 1 (!@#$%^&*)
-
-✅ Example: `TestPass123!`
-❌ Bad: `password`, `Pass123`, `nospecial1A`
+| Service | URL | Purpose |
+|---------|-----|---------|
+| **Frontend** | http://localhost:8080 | React Dashboard |
+| **Backend API** | http://localhost:3000 | REST API |
+| **API Docs** | http://localhost:3000/api/docs | Swagger UI |
+| **Adminer** | http://localhost:8080/adminer | DB Admin (if enabled) |
+| **PostgreSQL** | localhost:5432 | Database |
+| **Redis** | localhost:6379 | Cache |
 
 ---
 
-## 🔑 Login & Authentication
-
-### Login
-```typescript
-// Via UI: http://localhost:8080/login
-// Then auto-redirected:
-//   - admin → /admin/dashboard
-//   - staff → /staff/dashboard
-//   - customer → /dashboard
-```
-
-### Get Token with cURL
-```bash
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "customer@test.com",
+## 🏗️ Project Structure
     "password": "TestPass123!"
   }'
 # Returns: { token: "...", user: { ... } }

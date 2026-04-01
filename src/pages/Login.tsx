@@ -30,11 +30,8 @@ const Login = () => {
    */
   const forceShowLogin = searchParams.get('force') === 'true';
   
-  const getRedirectPathByRole = (_roleName?: string | null) => "/dashboard";
-
   if (isAuthenticated && !forceShowLogin) {
-    const primaryRole = user?.roles?.[0] || user?.role || user?.user_type;
-    return <Navigate to={getRedirectPathByRole(primaryRole)} replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   // Map role to demo email
@@ -68,8 +65,8 @@ const Login = () => {
         description: "Logged in successfully!",
       });
 
-      // Explicit navigation is required for /login?force=true flows.
-      navigate(getRedirectPathByRole(role), { replace: true });
+      // Navigate to dashboard
+      navigate("/dashboard", { replace: true });
     } catch (err: any) {
       toast({
         title: "Login Failed",
@@ -91,7 +88,7 @@ const Login = () => {
         description: "Logged in as demo user!",
       });
 
-      navigate(getRedirectPathByRole(demoRole), { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err: any) {
       toast({
         title: "Login Failed",

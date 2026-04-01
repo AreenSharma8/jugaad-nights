@@ -1,153 +1,105 @@
-# Jugaad Nights Operations Hub - Full Stack Setup Guide
+# Jugaad Nights Operations Hub - Setup Guide
 
-## Project Overview
+## 🚀 Quick Start (Choose One)
 
-A complete restaurant operations management system with:
-- **Backend**: NestJS REST API with PostgreSQL + Redis
-- **Frontend**: React + TypeScript with React Query
-- **Architecture**: Modular Monolith with complete CRUD operations
-
-## Quick Start - Development Mode
-
-### Prerequisites
-- Node.js 20+
-- PostgreSQL 15+
-- Redis 7+
-- Bun or npm package manager
-
-### 1. Backend Setup
-
+### Option 1: Docker Compose (Recommended - All-in-One)
 ```bash
-# Navigate to backend directory
-cd backend
-
-# Install dependencies
-npm install
-
-# Create .env file with database config
-cat > .env << EOF
-NODE_ENV=development
-APP_PORT=3000
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
-DB_NAME=jugaad_nights
-DB_SYNCHRONIZE=true
-REDIS_HOST=localhost
-REDIS_PORT=6379
-JWT_SECRET=your-secret-key-change-in-production
-EOF
-
-# Run database migrations (auto-sync in dev mode)
-npm run start:dev
+./start.sh
+# or manually:
+docker-compose up --build
 ```
 
-Backend will be available at: `http://localhost:3000`
-API Documentation: `http://localhost:3000/api/docs` (Swagger UI)
+**Access:**
+- Frontend: http://localhost:8080
+- Backend API: http://localhost:3000
+- API Docs: http://localhost:3000/api/docs
 
-### 2. Frontend Setup
+**See:** [00_START_HERE_DOCKER.md](./00_START_HERE_DOCKER.md)
 
+---
+
+### Option 2: Local Development (3 Terminals)
+
+**Terminal 1 - Database & Cache:**
 ```bash
-# In the root directory
+docker-compose up postgres redis -d
+# Wait for services to be healthy
+```
+
+**Terminal 2 - Backend:**
+```bash
+cd backend
 npm install
+npm run build
+npm run migration:run       # Apply database migrations
+npm run start:dev           # Start NestJS API
+```
 
-# Create .env file
-cat > .env << EOF
-VITE_API_URL=http://localhost:3000/api
-VITE_APP_ENV=development
-EOF
-
-# Start development server
+**Terminal 3 - Frontend:**
+```bash
+npm install
 npm run dev
 ```
 
-Frontend will be available at: `http://localhost:8080`
-
-### 3. Access the Application
-
-**Login Page**: `http://localhost:8080/`
-**Dashboard**: `http://localhost:8080/dashboard`
-
-**Demo Credentials**:
-- Email: `admin@jugaadnights.com`
-- Password: `password123`
+**Access:**
+- Frontend: http://localhost:8080
+- Backend API: http://localhost:3000
 
 ---
 
-## Docker Deployment - Production Mode
+## 📋 Project Structure
 
-### Prerequisites
-- Docker 20.10+
-- Docker Compose 2.0+
-
-### Deploy with Docker Compose
-
-```bash
-# From root directory
-docker-compose up -d
 ```
-
-**Services**:
-- **Backend**: http://localhost:3000
-- **Frontend**: http://localhost:8080
-- **PostgreSQL**: localhost:5432
-- **Redis**: localhost:6379
-
-### Environment Configuration
-
-Create `.env` file in root directory:
-
-```env
-# Database
-DB_USERNAME=jugaad_user
-DB_PASSWORD=jugaad_password
-DB_NAME=jugaad_nights
-DB_PORT=5432
-
-# Redis
-REDIS_PORT=6379
-
-# Backend
-APP_PORT=3000
-NODE_ENV=production
-JWT_SECRET=your-production-secret-key-change-this
-
-# Frontend
-FRONTEND_PORT=8080
-VITE_API_URL=http://localhost:3000/api
-```
-
-### Health Checks
-
-```bash
-# Check backend health
-curl http://localhost:3000/api
-
-# Check PostgreSQL
-docker-compose exec postgres pg_isready -U jugaad_user
-
-# Check Redis
-docker-compose exec redis redis-cli ping
-```
-
-### View Logs
-
-```bash
-# All services
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f backend
-docker-compose logs -f postgres
-docker-compose logs -f redis
+jugaad-nights/
+├── backend/
+│   ├── src/
+│   │   ├── migrations/              # TypeORM database migrations
+│   │   ├── modules/                 # 12 feature modules
+│   │   ├── config/                  # Database configuration
+│   │   └── common/                  # Shared utilities
+│   ├── package.json                 # Backend dependencies
+│   └── README.md                    # Backend documentation
+├── src/                             # Frontend React code
+├── docker-compose.yml               # Docker orchestration
+├── 00_START_HERE_DOCKER.md          # Docker quick start
+├── TYPEORM_QUICK_START_MIGRATIONS.md
+└── [other documentation files]
 ```
 
 ---
 
-## API Integration
+## 🗄️ Database Migrations (TypeORM)
 
-### Backend API Endpoints
+**TypeORM is the Node.js equivalent of SQLAlchemy + Alembic**
+
+### Running Migrations
+
+**With Docker:**
+```bash
+./start.sh                                    # Start all services
+docker-compose exec backend npm run migration:run  # Apply migrations
+```
+
+**Locally:**
+```bash
+cd backend
+npm run build
+npm run migration:run  # Apply database schema
+```
+
+### Creating New Migrations
+
+After modifying an entity:
+```bash
+npm run migration:generate -- -n DescriptiveName
+npm run migration:run
+```
+
+**See:** [TYPEORM_QUICK_START_MIGRATIONS.md](./TYPEORM_QUICK_START_MIGRATIONS.md)
+
+---
+
+## 🔌 Backend API Endpoints
 
 All API calls go through: `http://localhost:3000/api`
 
