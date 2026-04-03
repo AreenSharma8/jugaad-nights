@@ -132,13 +132,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Handle different response formats
             if (userResponse && userResponse.user) {
               verifiedUser = userResponse.user;
-            } else if (userResponse && userResponse.data && userResponse.data.user) {
-              verifiedUser = userResponse.data.user;
-            } else if (userResponse && typeof userResponse === 'object') {
+            } else if (userResponse && typeof userResponse === 'object' && 'id' in userResponse && 'email' in userResponse) {
               // Check if the response itself is a user object
-              if (userResponse.id && userResponse.email) {
-                verifiedUser = userResponse;
-              }
+              verifiedUser = userResponse;
             }
             
             if (!verifiedUser) {

@@ -108,6 +108,10 @@ class ApiClient {
     return this.client.get<ApiResponse>(`/sales/${id}`);
   }
 
+  async updateOrder(id: string, orderData: any) {
+    return this.client.patch<ApiResponse>(`/sales/${id}`, orderData);
+  }
+
   async getSalesTrends(outlet_id: string, startDate?: string, endDate?: string) {
     return this.client.get<ApiResponse>("/sales/trends", {
       params: { outlet_id, startDate, endDate },

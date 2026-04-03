@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
-import { useOrders, useSalesTrends, useCreateOrder } from "@/hooks/useApi";
+import { useOrders, useSalesTrends, useCreateOrder, useUpdateOrder } from "@/hooks/useApi";
 
 const tt = {
   contentStyle: {
@@ -24,6 +24,7 @@ const Sales = () => {
   const { user } = useAuth();
   const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
   const [showForm, setShowForm] = useState(true);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     customer_name: "",
     customer_phone: "",
@@ -52,36 +53,128 @@ const Sales = () => {
     setFormData({ ...formData, items: newItems });
   };
 
+  const validateForm = () => {
+    const errors: string[] = [];
+    
+    // Validate customer name (alphabetical only)
+    if (formData.customer_name && !/^[a-zA-Z\s]*$/.test(formData.customer_name)) {
+      errors.push('Customer name must contain only alphabetical characters');
+    }
+    
+    // Validate phone (numeric, max 10 digits)
+    if (formData.customer_phone) {
+      if (!/^\d+$/.test(formData.customer_phone)) {
+        errors.push('Phone number must contain only digits');
+      } else if (formData.customer_phone.length !== 10) {
+        errors.push('Phone number must be exactly 10 digits');
+      }
+    }
+    
+    // Validate items
+    for (let i = 0; i < formData.items.length; i++) {
+      const item = formData.items[i];
+      if (!item.item_name || !item.quantity || !item.unit_price) continue;
+      
+      // Validate item name (alphabetical only)
+      if (!/^[a-zA-Z\s]*$/.test(item.item_name)) {
+        errors.push(`Item ${i + 1}: Name must contain only alphabetical characters`);
+      }
+      
+      // Validate quantity (positive integer)
+      if (item.quantity < 1 || !Number.isInteger(item.quantity)) {
+        errors.push(`Item ${i + 1}: Quantity must be a positive whole number`);
+      }
+      
+      // Validate price (positive number)
+      if (item.unit_price <= 0) {
+        errors.push(`Item ${i + 1}: Price must be a positive number`);
+      }
+    }
+    
+    const validItems = formData.items.filter(item => item.item_name && item.quantity && item.unit_price);
+    if (validItems.length === 0) {
+      errors.push('Please add at least one valid item');
+    }
+    
+    if (errors.length > 0) {
+      alert('Validation errors:\n' + errors.join('\n'));
+      return false;
+    }
+    return true;
+  };
+
   const createOrderMutation = useCreateOrder();
+  const updateOrderMutation = useUpdateOrder();
+
+  const resetForm = () => {
+    setFormData({
+      customer_name: "",
+      customer_phone: "",
+      order_type: "Dine In",
+      payment_type: "Cash",
+      items: [{ item_name: "", quantity: 1, unit_price: 0 }],
+    });
+    setEditingOrderId(null);
+  };
+
+  const handleEditOrder = (order: any) => {
+    // Pre-fill form with order data
+    setFormData({
+      customer_name: order.customer_info?.name || "",
+      customer_phone: order.customer_info?.phone || "",
+      order_type: order.order_type || "Dine In",
+      payment_type: order.payment_type || "Cash",
+      items: order.items?.map((item: any) => ({
+        item_name: item.item_name,
+        quantity: parseInt(String(item.quantity)) || 1,
+        unit_price: parseFloat(String(item.unit_price)) || 0,
+      })) || [{ item_name: "", quantity: 1, unit_price: 0 }],
+    });
+    setEditingOrderId(order.id);
+    setShowForm(true);
+  };
 
   const handleSubmitOrder = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
     const orderData = {
       customer_name: formData.customer_name || 'Walk-in Customer',
       customer_phone: formData.customer_phone || 'N/A',
       order_type: formData.order_type,
       payment_type: formData.payment_type,
-      items: formData.items.filter(item => item.item_name && item.quantity),
+      items: formData.items
+        .filter(item => item.item_name && item.quantity && item.unit_price)
+        .map(item => ({
+          item_name: item.item_name,
+          quantity: parseInt(String(item.quantity)) || 1,
+          unit_price: parseFloat(String(item.unit_price)) || 0,
+        })),
       outlet_id: user?.outlet_id,
     };
-    
-    if (orderData.items.length === 0) {
-      alert('Please add at least one item');
-      return;
-    }
 
-    createOrderMutation.mutateAsync(orderData).then(() => {
-      setFormData({
-        customer_name: "",
-        customer_phone: "",
-        order_type: "Dine In",
-        payment_type: "Cash",
-        items: [{ item_name: "", quantity: 1, unit_price: 0 }],
+    if (editingOrderId) {
+      // Update existing order
+      updateOrderMutation.mutateAsync({ id: editingOrderId, data: orderData }).then(() => {
+        resetForm();
+        alert('Order updated successfully!');
+      }).catch((error: any) => {
+        console.error('Order update error:', error);
+        alert('Failed to update order: ' + (error?.message || 'Unknown error'));
       });
-    }).catch((error: any) => {
-      console.error('Order submission error:', error);
-      alert('Failed to create order: ' + (error?.message || 'Unknown error'));
-    });
+    } else {
+      // Create new order
+      createOrderMutation.mutateAsync(orderData).then(() => {
+        resetForm();
+        alert('Order created successfully!');
+      }).catch((error: any) => {
+        console.error('Order submission error:', error);
+        alert('Failed to create order: ' + (error?.message || 'Unknown error'));
+      });
+    }
   };
 
   // Calculate date range based on period
@@ -113,21 +206,13 @@ const Sales = () => {
     endDate
   );
 
-  // Transform orders to itemSales format
-  const itemSalesMap = new Map();
-  orders?.forEach((order: any) => {
-    const key = order.item_name || "Unknown Item";
-    const existing = itemSalesMap.get(key) || { qty: 0, revenue: 0, price: 0 };
-    itemSalesMap.set(key, {
-      name: key,
-      category: order.category || "Other",
-      qty: existing.qty + (order.quantity || 0),
-      revenue: existing.revenue + (order.total_amount || 0),
-      avgPrice: order.unit_price || 0,
-    });
-  });
-
-  const itemSales = Array.from(itemSalesMap.values()).sort((a, b) => b.revenue - a.revenue);
+  // 🔍 Debug: Log orders data to check if items are populated
+  if (orders) {
+    console.log("🔍 ORDERS DATA RECEIVED:", JSON.stringify(orders, null, 2));
+    if (orders.length > 0) {
+      console.log("🔍 FIRST ORDER ITEMS:", orders[0].items);
+    }
+  }
 
   // Default data structures
   const dailyData = trends?.daily || [];
@@ -168,7 +253,7 @@ const Sales = () => {
       {/* Order Entry Form */}
       {showForm && (
         <form onSubmit={handleSubmitOrder} className="glass-card p-5 space-y-4">
-          <h3 className="font-display text-lg font-semibold text-foreground">Record New Order</h3>
+          <h3 className="font-display text-lg font-semibold text-foreground">{editingOrderId ? 'Edit Order' : 'Record New Order'}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-muted-foreground text-sm">Outlet</Label>
@@ -182,7 +267,10 @@ const Sales = () => {
                 type="text"
                 placeholder="e.g. Rajesh Patel"
                 value={formData.customer_name}
-                onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                  setFormData({ ...formData, customer_name: value });
+                }}
                 className="bg-secondary border-border h-11"
               />
             </div>
@@ -192,7 +280,11 @@ const Sales = () => {
                 type="tel"
                 placeholder="e.g. 9876543210"
                 value={formData.customer_phone}
-                onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  setFormData({ ...formData, customer_phone: value });
+                }}
+                maxLength={10}
                 className="bg-secondary border-border h-11"
               />
             </div>
@@ -243,7 +335,10 @@ const Sales = () => {
                     type="text"
                     placeholder="e.g. Butter Chicken"
                     value={item.item_name}
-                    onChange={(e) => handleItemChange(idx, "item_name", e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      handleItemChange(idx, "item_name", value);
+                    }}
                     className="bg-secondary border-border h-10 text-sm"
                   />
                 </div>
@@ -253,7 +348,10 @@ const Sales = () => {
                     type="number"
                     min="1"
                     value={item.quantity}
-                    onChange={(e) => handleItemChange(idx, "quantity", parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const value = Math.max(1, parseInt(e.target.value) || 1);
+                      handleItemChange(idx, "quantity", value);
+                    }}
                     className="bg-secondary border-border h-10 text-sm"
                   />
                 </div>
@@ -261,10 +359,14 @@ const Sales = () => {
                   <Label className="text-muted-foreground text-xs">Price</Label>
                   <Input
                     type="number"
+                    min="0"
                     step="0.01"
                     placeholder="250"
-                    value={item.unit_price}
-                    onChange={(e) => handleItemChange(idx, "unit_price", parseFloat(e.target.value))}
+                    value={item.unit_price || ''}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      handleItemChange(idx, "unit_price", Math.max(0, value));
+                    }}
                     className="bg-secondary border-border h-10 text-sm"
                   />
                 </div>
@@ -282,17 +384,88 @@ const Sales = () => {
 
           <div className="flex gap-2 pt-4">
             <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              Save Order
+              {editingOrderId ? 'Update Order' : 'Save Order'}
             </Button>
             <button
               type="button"
-              onClick={() => setShowForm(false)}
+              onClick={() => {
+                resetForm();
+                setShowForm(false);
+              }}
               className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-secondary transition-colors"
             >
               Cancel
             </button>
           </div>
         </form>
+      )}
+
+      {/* Orders Table */}
+      {orders && orders.length > 0 && (
+        <div className="glass-card p-5 overflow-x-auto">
+          <h3 className="font-display text-lg font-semibold text-foreground mb-4">Recent Orders</h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-muted-foreground text-xs border-b border-border">
+                <th className="text-left py-3 font-medium">Order ID</th>
+                <th className="text-left py-3 font-medium">Customer Details</th>
+                <th className="text-left py-3 font-medium">Items</th>
+                <th className="text-right py-3 font-medium">Order Type</th>
+                <th className="text-right py-3 font-medium">Payment Type</th>
+                <th className="text-right py-3 font-medium">Subtotal</th>
+                <th className="text-right py-3 font-medium">GST (5%)</th>
+                <th className="text-right py-3 font-medium">Grand Total</th>
+                <th className="text-center py-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((order: any) => {
+                // Use backend-calculated totals
+                const itemsSubtotal = parseFloat(order.total_amount as any) - parseFloat(order.tax_amount as any);
+                const gst = parseFloat(order.tax_amount as any);
+                const grandTotal = parseFloat(order.total_amount as any);
+                const itemsDisplay = order.items?.length > 0 
+                  ? order.items.map((item: any) => `${item.item_name} (${item.quantity})`).join(', ')
+                  : 'No items';
+                const orderDate = new Date(order.created_at).toLocaleString('en-IN', {
+                  timeZone: 'Asia/Kolkata',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+
+                return (
+                  <tr key={order.id} className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
+                    <td className="py-3 text-foreground font-medium">#{order.order_number || '—'}</td>
+                    <td className="py-3 text-muted-foreground">
+                      <div className="text-xs">
+                        <div className="text-foreground font-medium">{order.customer_info?.name || 'N/A'}</div>
+                        <div>{order.customer_info?.phone || 'N/A'}</div>
+                        <div className="text-xs mt-1">{orderDate}</div>
+                      </div>
+                    </td>
+                    <td className="py-3 text-muted-foreground text-xs">{itemsDisplay}</td>
+                    <td className="py-3 text-right text-foreground text-xs">{order.order_type || 'N/A'}</td>
+                    <td className="py-3 text-right text-foreground text-xs">{order.payment_type || 'N/A'}</td>
+                    <td className="py-3 text-right text-foreground">₹{itemsSubtotal.toFixed(2)}</td>
+                    <td className="py-3 text-right text-foreground">₹{gst.toFixed(2)}</td>
+                    <td className="py-3 text-right text-foreground font-bold">₹{grandTotal.toFixed(2)}</td>
+                    <td className="py-3 text-center">
+                      <button
+                        onClick={() => handleEditOrder(order)}
+                        className="px-2 py-1 bg-secondary hover:bg-secondary/80 text-foreground rounded-lg text-xs font-medium transition-colors"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <div className="grid lg:grid-cols-3 gap-4">
@@ -350,34 +523,7 @@ const Sales = () => {
       </div>
       )}
 
-      {/* Item Table */}
-      {itemSales.length > 0 && (
-      <div className="glass-card p-5 overflow-x-auto">
-        <h3 className="font-display text-lg font-semibold text-foreground mb-4">Item-wise Sales</h3>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-muted-foreground text-xs border-b border-border">
-              <th className="text-left py-3 font-medium">Item</th>
-              <th className="text-left py-3 font-medium">Category</th>
-              <th className="text-right py-3 font-medium">Qty</th>
-              <th className="text-right py-3 font-medium">Revenue</th>
-              <th className="text-right py-3 font-medium">Avg Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            {itemSales.map((item) => (
-              <tr key={item.name} className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
-                <td className="py-3 text-foreground font-medium">{item.name}</td>
-                <td className="py-3 text-muted-foreground">{item.category}</td>
-                <td className="py-3 text-right text-foreground">{item.qty}</td>
-                <td className="py-3 text-right text-foreground">₹{item.revenue.toLocaleString()}</td>
-                <td className="py-3 text-right text-muted-foreground">₹{item.avgPrice}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      )}
+
     </div>
   );
 };

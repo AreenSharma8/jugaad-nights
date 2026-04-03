@@ -67,8 +67,20 @@ export const useCreateOrder = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: any) => apiClient.createOrder(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    onSuccess: (response: any) => {
+      // Invalidate with specific outlet_id to refresh the correct query
+      queryClient.invalidateQueries({ queryKey: ["orders", response.data?.outlet_id] });
+    },
+  });
+};
+
+export const useUpdateOrder = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => apiClient.updateOrder(id, data),
+    onSuccess: (response: any) => {
+      // Invalidate with specific outlet_id to refresh the correct query
+      queryClient.invalidateQueries({ queryKey: ["orders", response.data?.outlet_id] });
     },
   });
 };

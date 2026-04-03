@@ -35,10 +35,19 @@ export class Order {
   @Column({ type: 'varchar', nullable: true })
   order_type: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  payment_type: string;
+
+  @Column({ type: 'integer', nullable: true })
+  order_number: number;
+
+  @Column({ type: 'date', nullable: true })
+  order_date: string;
+
   @Column({ type: 'json', nullable: true })
   customer_info: Record<string, any>;
 
-  @OneToMany(() => OrderItem, (item) => item.order, { eager: true })
+  @OneToMany(() => OrderItem, (item) => item.order, { eager: true, cascade: ['insert', 'update'] })
   items: OrderItem[];
 
   @OneToMany(() => Payment, (payment) => payment.order, { eager: true })

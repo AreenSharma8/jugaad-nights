@@ -5,7 +5,7 @@ import {
   Logger,
   Inject,
 } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, IsNull } from 'typeorm';
 import { Order, OrderItem, Payment } from './entities';
 import { CreateOrderDto, CreatePaymentDto, SalesAnalyticsDto } from './dto/sales.dto';
 import { SalesRepository } from './repositories/sales.repository';
@@ -24,37 +24,143 @@ export class SalesService {
   }
 
   async createOrder(createOrderDto: CreateOrderDto, created_by: string): Promise<Order> {
+    // Build customer_info object
+    const customerInfo = {
+      ...(createOrderDto.customer_info || {}),
+      name: createOrderDto.customer_name || 'Walk-in Customer',
+      phone: createOrderDto.customer_phone || 'N/A',
+    };
+
+    // Get today's date in IST
+    const today = new Date();
+    const istDate = new Date(today.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }));
+    const orderDateStr = istDate.toISOString().split('T')[0];
+
+    // Get sequential order number for today
+    const ordersRepository = this.dataSource.getRepository(Order);
+    const todayOrderCount = await ordersRepository.count({
+      where: {
+        outlet_id: createOrderDto.outlet_id,
+        order_date: orderDateStr,
+        deleted_at: IsNull(),
+      },
+    });
+    const orderNumber = todayOrderCount + 1;
+
+    // Calculate totals FIRST
+    const itemsRepository = this.dataSource.getRepository(OrderItem);
+    const itemTotals = createOrderDto.items.map((item) => ({
+      ...item,
+      total_price: item.quantity * item.unit_price,
+    }));
+
+    const subtotal = itemTotals.reduce((sum, item) => sum + item.total_price, 0);
+    const discountAmount = createOrderDto.discount_amount || 0;
+    const taxAmount = subtotal * 0.05; // 5% GST
+    const totalAmount = subtotal - discountAmount + taxAmount;
+
+    // 🔥 Step 1: Create and SAVE ORDER FIRST (without items)
     const order = this.salesRepository.create({
       outlet_id: createOrderDto.outlet_id,
-      order_type: createOrderDto.order_type,
-      customer_info: createOrderDto.customer_info,
+      order_type: createOrderDto.order_type || 'Dine In',
+      payment_type: createOrderDto.payment_type || 'Cash',
+      customer_info: customerInfo,
       status: 'pending',
+      order_number: orderNumber,
+      order_date: orderDateStr,
+      total_amount: totalAmount as any,
+      tax_amount: taxAmount as any,
+      discount_amount: discountAmount as any,
       created_by,
       updated_by: created_by,
     });
 
-    // Calculate totals
-    const itemsRepository = this.dataSource.getRepository(OrderItem);
-    const items = createOrderDto.items.map((item) =>
+    const savedOrder = await this.salesRepository.save(order);
+    this.logger.log(`Order saved: ID=${savedOrder.id}, OrderNumber=${savedOrder.order_number}`);
+
+    // 🔥 Step 2: Create items with the SAVED order's ID
+    const items = itemTotals.map((item) =>
       itemsRepository.create({
         ...item,
-        total_price: item.quantity * item.unit_price,
+        order_id: savedOrder.id, // Use the saved order's ID
         created_by,
         updated_by: created_by,
       }),
     );
 
-    const subtotal = items.reduce((sum, item) => sum + parseFloat(item.total_price as any), 0);
-    const discountAmount = createOrderDto.discount_amount || 0;
-    const taxAmount = subtotal * 0.05; // 5% tax
+    // 🔥 Step 3: Save items
+    await itemsRepository.save(items);
+    this.logger.log(`Items saved: OrderID=${savedOrder.id}, ItemCount=${items.length}`);
+
+    // 🔥 Step 4: Return complete order with items attached
+    savedOrder.items = items;
+    return savedOrder;
+  }
+
+  async updateOrder(
+    orderId: string,
+    updateOrderDto: CreateOrderDto,
+    updated_by: string,
+  ): Promise<Order> {
+    // Fetch existing order
+    const order = await this.getOrderById(orderId);
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    // Build updated customer_info
+    const customerInfo = {
+      ...(updateOrderDto.customer_info || {}),
+      name: updateOrderDto.customer_name || order.customer_info?.name || 'Walk-in Customer',
+      phone: updateOrderDto.customer_phone || order.customer_info?.phone || 'N/A',
+    };
+
+    // Calculate new totals
+    const itemTotals = updateOrderDto.items.map((item) => ({
+      ...item,
+      total_price: item.quantity * item.unit_price,
+    }));
+
+    const subtotal = itemTotals.reduce((sum, item) => sum + item.total_price, 0);
+    const discountAmount = updateOrderDto.discount_amount || 0;
+    const taxAmount = subtotal * 0.05; // 5% GST
     const totalAmount = subtotal - discountAmount + taxAmount;
 
-    order.items = items;
+    // 🔥 Step 1: Update order details
+    order.outlet_id = updateOrderDto.outlet_id || order.outlet_id; // ✅ Preserve outlet_id
+    order.customer_info = customerInfo;
+    order.order_type = updateOrderDto.order_type || order.order_type;
+    order.payment_type = updateOrderDto.payment_type || order.payment_type;
     order.total_amount = totalAmount as any;
     order.tax_amount = taxAmount as any;
     order.discount_amount = discountAmount as any;
+    order.updated_by = updated_by;
 
-    return this.salesRepository.save(order);
+    const updatedOrder = await this.salesRepository.save(order);
+    this.logger.log(`Order updated: ID=${updatedOrder.id}`);
+
+    // 🔥 Step 2: Delete old items
+    const itemsRepository = this.dataSource.getRepository(OrderItem);
+    await itemsRepository.delete({ order_id: orderId });
+    this.logger.log(`Old items deleted: OrderID=${orderId}`);
+
+    // 🔥 Step 3: Create new items
+    const newItems = itemTotals.map((item) =>
+      itemsRepository.create({
+        ...item,
+        order_id: orderId,
+        created_by: updated_by,
+        updated_by: updated_by,
+      }),
+    );
+
+    // 🔥 Step 4: Save new items
+    await itemsRepository.save(newItems);
+    this.logger.log(`New items created: OrderID=${orderId}, ItemCount=${newItems.length}`);
+
+    // 🔥 Step 5: Return updated order with items
+    updatedOrder.items = newItems;
+    return updatedOrder;
   }
 
   async getOrdersBySales(outlet_id: string): Promise<Order[]> {

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString, IsOptional, IsUUID, IsArray, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, IsOptional, IsUUID, IsArray, ValidateNested, Matches, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
@@ -7,10 +7,12 @@ export class CreateOrderItemDto {
   item_name: string;
 
   @IsNotEmpty()
+  @Type(() => Number)
   @IsNumber()
   quantity: number;
 
   @IsNotEmpty()
+  @Type(() => Number)
   @IsNumber()
   unit_price: number;
 
@@ -27,6 +29,20 @@ export class CreateOrderDto {
   order_type?: string;
 
   @IsOptional()
+  @IsString()
+  payment_type?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-zA-Z\s]*$/, { message: 'Customer name must contain only alphabetical characters' })
+  customer_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{10}$/, { message: 'Phone number must be exactly 10 digits' })
+  customer_phone?: string;
+
+  @IsOptional()
   customer_info?: Record<string, any>;
 
   @IsNotEmpty()
@@ -36,6 +52,7 @@ export class CreateOrderDto {
   items: CreateOrderItemDto[];
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   discount_amount?: number;
 }

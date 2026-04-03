@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -49,6 +50,14 @@ export class SalesController {
   @ApiResponse({ status: 200, description: 'Order retrieved successfully' })
   async getOrder(@Param('id') id: string) {
     return this.salesService.getOrderById(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update an order' })
+  @ApiResponse({ status: 200, description: 'Order updated successfully' })
+  async updateOrder(@Param('id') id: string, @Body() createOrderDto: CreateOrderDto) {
+    const updated_by = '123e4567-e89b-12d3-a456-426614174000';
+    return this.salesService.updateOrder(id, createOrderDto, updated_by);
   }
 
   @Post('payments')
