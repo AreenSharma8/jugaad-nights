@@ -14,25 +14,38 @@ export class PartyOrdersService {
 
   async createOrder(createDto: CreatePartyOrderDto, created_by: string): Promise<PartyOrder> {
     const itemsRepo = this.dataSource.getRepository(PartyOrderItem);
-    const items = createDto.items.map((item) =>
-      itemsRepo.create({
-        ...item,
-        total_price: item.quantity * item.unit_price,
-        created_by,
-      }),
-    );
+    
+    // Handle items if provided, otherwise create empty items array
+    const items = (createDto.items && createDto.items.length > 0)
+      ? createDto.items.map((item) =>
+          itemsRepo.create({
+            ...item,
+            total_price: item.quantity * item.unit_price,
+            created_by,
+          }),
+        )
+      : [];
 
-    const totalAmount = items.reduce((sum, item) => sum + parseFloat(item.total_price as any), 0);
+    // Calculate total amount from items or use provided total_amount
+    const totalAmount = createDto.total_amount || 
+      (items.length > 0 
+        ? items.reduce((sum, item) => sum + parseFloat(item.total_price as any), 0)
+        : 0);
+
+    // Use client_name or customer_name, client_phone or customer_phone
+    const customerName = createDto.client_name || createDto.customer_name || 'N/A';
+    const customerPhone = createDto.client_phone || createDto.customer_phone;
+    const customerId = createDto.customer_id || undefined;
 
     const order = this.partyOrderRepository.create({
       outlet_id: createDto.outlet_id,
-      customer_id: createDto.customer_id,
-      customer_name: createDto.customer_name,
-      customer_phone: createDto.customer_phone,
+      customer_id: customerId,
+      customer_name: customerName,
+      customer_phone: customerPhone,
       event_date: createDto.event_date,
       event_type: createDto.event_type,
       total_amount: totalAmount as any,
-      status: 'pending',
+      status: createDto.status || 'pending',
       items,
       created_by,
       updated_by: created_by,

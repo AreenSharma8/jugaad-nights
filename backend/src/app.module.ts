@@ -57,6 +57,7 @@ import { SalesModule } from './modules/sales/sales.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { WastageModule } from './modules/wastage/wastage.module';
 import { PartyOrdersModule } from './modules/party-orders/party-orders.module';
+import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { CashFlowModule } from './modules/cashflow/cashflow.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
@@ -179,6 +180,14 @@ import { StaffModule } from './modules/staff/staff.module';
      * - Custom pricing
      */
     PartyOrdersModule,
+
+    /**
+     * PurchaseOrdersModule: Supplier purchase orders
+     * - Track orders placed to suppliers
+     * - Purchase order management
+     * - Delivery status tracking
+     */
+    PurchaseOrdersModule,
 
     /**
      * AttendanceModule: Employee attendance

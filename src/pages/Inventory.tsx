@@ -25,10 +25,13 @@ const Inventory = () => {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     item_name: "",
+    item_code: "",
     category: "",
     current_quantity: "",
     unit: "",
     reorder_level: "",
+    min_quantity: "",
+    max_quantity: "",
     unit_cost: "",
   });
 
@@ -36,13 +39,19 @@ const Inventory = () => {
 
   const handleSubmitItem = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Generate item code if not provided
+    const generatedCode = formData.item_code || `INV-${Date.now()}`;
+    
     const itemData = {
       item_name: formData.item_name,
+      item_code: generatedCode,
       category: formData.category,
       current_quantity: parseFloat(formData.current_quantity) || 0,
       unit: formData.unit,
-      reorder_level: parseFloat(formData.reorder_level) || 0,
-      reorder_quantity: parseFloat(formData.reorder_level) || 0,
+      reorder_level: parseFloat(formData.reorder_level) || 10,
+      min_quantity: parseFloat(formData.min_quantity) || 5,
+      max_quantity: parseFloat(formData.max_quantity) || parseFloat(formData.current_quantity) * 2 || 100,
       unit_cost: parseFloat(formData.unit_cost) || 0,
       outlet_id: user?.outlet_id,
     };
@@ -50,10 +59,13 @@ const Inventory = () => {
     createInventoryMutation.mutateAsync(itemData).then(() => {
       setFormData({
         item_name: "",
+        item_code: "",
         category: "",
         current_quantity: "",
         unit: "",
         reorder_level: "",
+        min_quantity: "",
+        max_quantity: "",
         unit_cost: "",
       });
       setShowForm(false);
@@ -69,13 +81,13 @@ const Inventory = () => {
   const { data: health } = useInventoryHealth(user?.outlet_id || "");
 
   // Transform to stockItems format
-  const stockItems = inventory?.map((item: any) => ({
+  const stockItems = Array.isArray(inventory) ? inventory.map((item: any) => ({
     name: item.item_name,
-    current: item.current_stock,
+    current: item.current_quantity,
     reorder: item.reorder_level,
     unit: item.unit,
-    status: item.current_stock < item.reorder_level ? (item.current_stock < (item.reorder_level * 0.5) ? "critical" : "low") : "ok",
-  })) || [];
+    status: item.current_quantity < item.reorder_level ? (item.current_quantity < (item.reorder_level * 0.5) ? "critical" : "low") : "ok",
+  })) : [];
 
   // Use health data for analytics
   const purchaseTrend = health?.purchase_trend || [];
@@ -113,6 +125,16 @@ const Inventory = () => {
                 onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
                 className="bg-secondary border-border h-11"
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Item Code (Optional)</Label>
+              <Input
+                type="text"
+                placeholder="Auto-generated if empty"
+                value={formData.item_code}
+                onChange={(e) => setFormData({ ...formData, item_code: e.target.value })}
+                className="bg-secondary border-border h-11"
               />
             </div>
             <div className="space-y-2">
@@ -160,13 +182,37 @@ const Inventory = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground text-sm">Reorder Level *</Label>
+              <Label className="text-muted-foreground text-sm">Reorder Level (For Notifications) *</Label>
+              <Input
+                type="number"
+                step="0.1"
+                placeholder="e.g. 15 - Alert when stock falls below this"
+                value={formData.reorder_level}
+                onChange={(e) => setFormData({ ...formData, reorder_level: e.target.value })}
+                className="bg-secondary border-border h-11"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Minimum Stock Level *</Label>
               <Input
                 type="number"
                 step="0.1"
                 placeholder="e.g. 10"
-                value={formData.reorder_level}
-                onChange={(e) => setFormData({ ...formData, reorder_level: e.target.value })}
+                value={formData.min_quantity}
+                onChange={(e) => setFormData({ ...formData, min_quantity: e.target.value })}
+                className="bg-secondary border-border h-11"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Maximum Stock Level *</Label>
+              <Input
+                type="number"
+                step="0.1"
+                placeholder="e.g. 100"
+                value={formData.max_quantity}
+                onChange={(e) => setFormData({ ...formData, max_quantity: e.target.value })}
                 className="bg-secondary border-border h-11"
                 required
               />

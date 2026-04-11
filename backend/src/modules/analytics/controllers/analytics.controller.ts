@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Query, Logger, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Delete, Param, Query, Logger, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AnalyticsService } from '../services/analytics.service';
+import { CreateFestivalDto, UpdateFestivalDto } from '../dto';
 
 @ApiTags('Analytics')
 @ApiBearerAuth()
@@ -132,6 +133,99 @@ export class AnalyticsController {
     return {
       status: 'success',
       data: { message: 'Cache cleared successfully' },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ========== FESTIVAL ENDPOINTS ==========
+
+  @Post('festivals')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new festival' })
+  async createFestival(@Body() createFestivalDto: CreateFestivalDto) {
+    this.logger.log(`Creating festival for outlet: ${createFestivalDto.outlet_id}`);
+    const festival = await this.analyticsService.createFestival(createFestivalDto, '123e4567-e89b-12d3-a456-426614174000');
+    
+    return {
+      status: 'success',
+      data: festival,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Get('festivals')
+  @ApiOperation({ summary: 'Get all festivals for an outlet' })
+  @ApiQuery({ name: 'outlet_id', required: true })
+  async getFestivals(@Query('outlet_id') outlet_id: string) {
+    this.logger.log(`Fetching festivals for outlet: ${outlet_id}`);
+    const festivals = await this.analyticsService.getFestivalsByOutlet(outlet_id);
+    
+    return {
+      status: 'success',
+      data: festivals,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Get('festivals/:id')
+  @ApiOperation({ summary: 'Get festival by ID' })
+  async getFestivalById(@Param('id') id: string) {
+    this.logger.log(`Fetching festival: ${id}`);
+    const festival = await this.analyticsService.getFestivalById(id);
+    
+    return {
+      status: 'success',
+      data: festival,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Patch('festivals/:id')
+  @ApiOperation({ summary: 'Update festival' })
+  async updateFestival(
+    @Param('id') id: string,
+    @Body() updateFestivalDto: UpdateFestivalDto,
+  ) {
+    this.logger.log(`Updating festival: ${id}`);
+    const festival = await this.analyticsService.updateFestival(
+      id,
+      updateFestivalDto,
+      '123e4567-e89b-12d3-a456-426614174000',
+    );
+    
+    return {
+      status: 'success',
+      data: festival,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Delete('festivals/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete festival' })
+  async deleteFestival(@Param('id') id: string) {
+    this.logger.log(`Deleting festival: ${id}`);
+    await this.analyticsService.deleteFestival(id);
+    
+    return {
+      status: 'success',
+      data: { message: 'Festival deleted successfully' },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Get('festivals/:id/metrics')
+  @ApiOperation({ summary: 'Get festival metrics and ROI' })
+  async getFestivalMetrics(
+    @Param('id') id: string,
+    @Query('outlet_id') outlet_id: string,
+  ) {
+    this.logger.log(`Fetching metrics for festival: ${id}`);
+    const metrics = await this.analyticsService.getFestivalMetrics(id, outlet_id);
+    
+    return {
+      status: 'success',
+      data: metrics,
       timestamp: new Date().toISOString(),
     };
   }

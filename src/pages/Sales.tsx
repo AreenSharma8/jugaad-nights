@@ -401,7 +401,7 @@ const Sales = () => {
       )}
 
       {/* Orders Table */}
-      {orders && orders.length > 0 && (
+      {Array.isArray(orders) && orders.length > 0 && (
         <div className="glass-card p-5 overflow-x-auto">
           <h3 className="font-display text-lg font-semibold text-foreground mb-4">Recent Orders</h3>
           <table className="w-full text-sm">

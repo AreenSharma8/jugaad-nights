@@ -26,8 +26,13 @@ export class CreateInventoryItemDto {
 
   @IsNotEmpty()
   @IsNumber()
+  reorder_level: number;
+
+  @IsNotEmpty()
+  @IsNumber()
   min_quantity: number;
 
+  @IsNotEmpty()
   @IsNumber()
   max_quantity: number;
 
@@ -40,6 +45,10 @@ export class UpdateInventoryItemDto {
   @IsOptional()
   @IsNumber()
   current_quantity?: number;
+
+  @IsOptional()
+  @IsNumber()
+  reorder_level?: number;
 
   @IsOptional()
   @IsNumber()

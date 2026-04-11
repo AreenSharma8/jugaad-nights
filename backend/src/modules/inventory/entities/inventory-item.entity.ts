@@ -35,6 +35,9 @@ export class InventoryItem {
   current_quantity: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
+  reorder_level: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
   min_quantity: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })

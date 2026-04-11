@@ -25,13 +25,16 @@ const Wastage = () => {
   const [weight, setWeight] = useState("");
   const [reason, setReason] = useState("");
 
-  const wastageHistory = wastageData?.map((item: any) => ({
+  // Use "Navrangpura" for now - matches the hardcoded form field above
+  const outletName = "Navrangpura";
+
+  const wastageHistory = Array.isArray(wastageData) ? wastageData.map((item: any) => ({
     date: new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    outlet: user?.outlet_name || "Current Outlet",
+    outlet: outletName,
     item: item.item_name,
     weight: item.quantity,
     reason: item.reason,
-  })) || [];
+  })) : [];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +61,7 @@ const Wastage = () => {
           <div className="space-y-2">
             <Label className="text-muted-foreground text-sm">Outlet</Label>
             <div className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground">
-              Navrangpura
+              {outletName}
             </div>
           </div>
           <div className="space-y-2">

@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Loader, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
+import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus } from "@/hooks/useApi";
 
 interface POItem {
   item_name: string;
   quantity: number;
   unit_price: number;
+  unit?: string;
 }
 
 interface POFormData {
@@ -22,13 +25,19 @@ interface POFormData {
 }
 
 const PurchaseOrders = () => {
+  const { user } = useAuth();
+  const { data: ordersData = [], isLoading } = usePurchaseOrders(user?.outlet_id);
+  const createOrderMutation = useCreatePurchaseOrder();
+  const updateStatusMutation = useUpdatePurchaseOrderStatus();
   const [showForm, setShowForm] = useState(false);
+  const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<"Pending" | "Confirmed" | "Delivered">("Pending");
   const [formData, setFormData] = useState<POFormData>({
     po_number: "",
     supplier_name: "",
     order_date: new Date().toISOString().split("T")[0],
     delivery_date: "",
-    items: [{ item_name: "", quantity: 1, unit_price: 0 }],
+    items: [{ item_name: "", quantity: 1, unit_price: 0, unit: "" }],
     total_amount: 0,
     status: "Pending",
     notes: "",
@@ -37,7 +46,7 @@ const PurchaseOrders = () => {
   const handleAddItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { item_name: "", quantity: 1, unit_price: 0 }],
+      items: [...formData.items, { item_name: "", quantity: 1, unit_price: 0, unit: "" }],
     });
   };
 
@@ -60,21 +69,64 @@ const PurchaseOrders = () => {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSubmitPO = (e: React.FormEvent) => {
+  const handleSubmitPO = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Purchase Order submitted:", formData);
-    alert("Purchase Order created successfully!");
-    setShowForm(false);
-    setFormData({
-      po_number: "",
-      supplier_name: "",
-      order_date: new Date().toISOString().split("T")[0],
-      delivery_date: "",
-      items: [{ item_name: "", quantity: 1, unit_price: 0 }],
-      total_amount: 0,
-      status: "Pending",
-      notes: "",
-    });
+    
+    if (!formData.po_number.trim() || !formData.supplier_name.trim()) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    if (formData.items.length === 0 || formData.items.some(item => !item.item_name.trim())) {
+      alert("Please add at least one item");
+      return;
+    }
+
+    try {
+      const totalAmount = formData.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+      
+      await createOrderMutation.mutateAsync({
+        outlet_id: user?.outlet_id,
+        po_number: formData.po_number,
+        supplier_name: formData.supplier_name,
+        order_date: new Date(formData.order_date),
+        delivery_date: new Date(formData.delivery_date),
+        total_amount: totalAmount,
+        status: formData.status,
+        notes: formData.notes || null,
+        items: formData.items.map(item => ({
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          unit: item.unit || undefined,
+        })),
+      });
+      
+      alert("Purchase Order created successfully!");
+      setShowForm(false);
+      setFormData({
+        po_number: "",
+        supplier_name: "",
+        order_date: new Date().toISOString().split("T")[0],
+        delivery_date: "",
+        items: [{ item_name: "", quantity: 1, unit_price: 0, unit: "" }],
+        total_amount: 0,
+        status: "Pending",
+        notes: "",
+      });
+    } catch (error) {
+      alert("Failed to create order: " + (error instanceof Error ? error.message : "Unknown error"));
+    }
+  };
+
+  const handleStatusUpdate = async (orderId: string, newStatus: "Pending" | "Confirmed" | "Delivered") => {
+    try {
+      await updateStatusMutation.mutateAsync({ id: orderId, status: newStatus });
+      setEditingStatusId(null);
+      alert("Status updated successfully!");
+    } catch (error) {
+      alert("Failed to update status: " + (error instanceof Error ? error.message : "Unknown error"));
+    }
   };
 
   return (
@@ -212,6 +264,21 @@ const PurchaseOrders = () => {
                       onChange={(e) => handleItemChange(index, "unit_price", parseFloat(e.target.value) || 0)}
                     />
                   </div>
+                  <div className="w-20 space-y-1">
+                    <Label htmlFor={`unit_${index}`} className="text-xs">Unit</Label>
+                    <select
+                      id={`unit_${index}`}
+                      value={item.unit || ""}
+                      onChange={(e) => handleItemChange(index, "unit", e.target.value)}
+                      className="w-full px-2 py-1 bg-background border border-input rounded-md text-foreground text-sm"
+                    >
+                      <option value="">Select</option>
+                      <option value="kg">kg</option>
+                      <option value="ltr">ltr</option>
+                      <option value="piece">piece</option>
+                      <option value="box">box</option>
+                    </select>
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleRemoveItem(index)}
@@ -244,18 +311,142 @@ const PurchaseOrders = () => {
               >
                 Cancel
               </Button>
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
-                Create Purchase Order
+              <Button 
+                type="submit" 
+                className="bg-primary hover:bg-primary/90"
+                disabled={createOrderMutation.isPending}
+              >
+                {createOrderMutation.isPending ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin mr-2" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Purchase Order"
+                )}
               </Button>
             </div>
           </form>
         </div>
       ) : (
-        <div className="glass-card p-12 text-center">
-          <div className="text-lg font-semibold text-foreground mb-2">No Purchase Orders</div>
-          <p className="text-muted-foreground max-w-md mx-auto">
-            Click "Create PO" to add a new purchase order
-          </p>
+        <div className="glass-card">
+          {isLoading ? (
+            <div className="p-12 text-center">
+              <Loader className="w-8 h-8 animate-spin mx-auto mb-3 text-primary" />
+              <p className="text-muted-foreground">Loading orders...</p>
+            </div>
+          ) : Array.isArray(ordersData) && ordersData.length > 0 ? (
+            <>
+              {console.log('📦 Purchase Orders Debug:', ordersData[0]?.items ? `${ordersData[0].items.length} items` : 'No items in first order')}
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-muted-foreground text-xs border-b border-border bg-muted/50">
+                    <th className="text-left py-3 px-4 font-medium">PO Number</th>
+                    <th className="text-left py-3 px-4 font-medium">Supplier</th>
+                    <th className="text-left py-3 px-4 font-medium">Order Date</th>
+                    <th className="text-left py-3 px-4 font-medium">Delivery Date</th>
+                    <th className="text-left py-3 px-4 font-medium">Items</th>
+                    <th className="text-right py-3 px-4 font-medium">Amount</th>
+                    <th className="text-left py-3 px-4 font-medium">Status</th>
+                    <th className="text-center py-3 px-4 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ordersData.map((order: any) => {
+                    const itemsDisplay = order.items?.length > 0 
+                      ? order.items.map((item: any) => {
+                          const unitDisplay = item.unit ? ` ${item.unit}` : '';
+                          return `${item.item_name} (${item.quantity}${unitDisplay})`;
+                        }).join(', ')
+                      : 'No items';
+                    
+                    return (
+                      <tr key={order.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                        <td className="py-3 px-4 text-foreground font-medium">{order.po_number}</td>
+                        <td className="py-3 px-4 text-foreground">{order.supplier_name}</td>
+                        <td className="py-3 px-4 text-muted-foreground">
+                          {new Date(order.order_date).toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: '2-digit'
+                          })}
+                        </td>
+                        <td className="py-3 px-4 text-muted-foreground">
+                          {new Date(order.delivery_date).toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: '2-digit'
+                          })}
+                        </td>
+                        <td className="py-3 px-4 text-muted-foreground text-xs max-w-xs truncate">{itemsDisplay}</td>
+                        <td className="py-3 px-4 text-right font-medium">₹{parseFloat(order.total_amount).toFixed(2)}</td>
+                        <td className="py-3 px-4">
+                          {editingStatusId === order.id ? (
+                            <div className="flex gap-2 items-center">
+                              <select
+                                value={selectedStatus}
+                                onChange={(e) => setSelectedStatus(e.target.value as "Pending" | "Confirmed" | "Delivered")}
+                                className="px-2 py-1 bg-background border border-input rounded text-sm"
+                              >
+                                <option value="Pending">Pending</option>
+                                <option value="Confirmed">Confirmed</option>
+                                <option value="Delivered">Delivered</option>
+                              </select>
+                              <button
+                                onClick={() => handleStatusUpdate(order.id, selectedStatus)}
+                                disabled={updateStatusMutation.isPending}
+                                className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium disabled:opacity-50"
+                              >
+                                {updateStatusMutation.isPending ? <Loader className="w-3 h-3 animate-spin" /> : '✓'}
+                              </button>
+                              <button
+                                onClick={() => setEditingStatusId(null)}
+                                className="px-2 py-1 bg-secondary hover:bg-secondary/80 text-foreground rounded text-xs"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${
+                                order.status === 'Delivered' ? 'bg-green-500/20 text-green-700' :
+                                order.status === 'Confirmed' ? 'bg-blue-500/20 text-blue-700' :
+                                'bg-yellow-500/20 text-yellow-700'
+                              }`}>
+                                {order.status}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {editingStatusId !== order.id && (
+                            <button
+                              onClick={() => {
+                                setEditingStatusId(order.id);
+                                setSelectedStatus(order.status);
+                              }}
+                              className="px-3 py-1 bg-primary/20 hover:bg-primary/30 text-primary rounded text-xs font-medium transition-colors flex items-center gap-1 mx-auto"
+                            >
+                              <ChevronDown className="w-3 h-3" /> Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            </>
+          ) : (
+            <div className="p-12 text-center">
+              <div className="text-lg font-semibold text-foreground mb-2">No Purchase Orders</div>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Click "Create PO" to add a new purchase order
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

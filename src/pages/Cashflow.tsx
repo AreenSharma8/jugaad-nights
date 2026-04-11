@@ -60,11 +60,11 @@ const Cashflow = () => {
     });
   };
 
-  const dailyInflow = cashFlowData?.map((entry: any) => ({
+  const dailyInflow = Array.isArray(cashFlowData) ? cashFlowData.map((entry: any) => ({
     date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     inflow: entry.inflow || 0,
     outflow: entry.outflow || 0,
-  })) || [];
+  })) : [];
 
   const summaryStats = summaryData || {
     total_inflow: 0,

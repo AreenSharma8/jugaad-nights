@@ -98,23 +98,23 @@ const Dashboard = () => {
    * Transform outlet comparison data for BarChart component
    * Format: [{ name: "Outlet A", sales: 50000, online: 30000, offline: 20000 }, ...]
    */
-  const outletData = data.outlet_comparison?.map((o: any) => ({
+  const outletData = Array.isArray(data?.outlet_comparison) ? data.outlet_comparison.map((o: any) => ({
     name: o.outlet_name,
     sales: o.total_sales || 0,
     online: o.online_sales || 0,
     offline: o.offline_sales || 0,
-  })) || [];
+  })) : [];
 
   /**
    * Extract top 5 selling items with revenue and quantity sold
    * Format: [{ rank: 1, name: "Chai", qty: 150, revenue: "₹7500" }, ...]
    */
-  const topItems = data.sales_breakdown?.slice(0, 5).map((item: any, i: number) => ({
+  const topItems = Array.isArray(data?.sales_breakdown) ? data.sales_breakdown.slice(0, 5).map((item: any, i: number) => ({
     rank: i + 1,
     name: item.item_name,
     qty: item.quantity,
     revenue: formatCurrency(item.revenue),
-  })) || [];
+  })) : [];
 
   /**
    * Prepare attendance data for PieChart (Present, Absent, Late)

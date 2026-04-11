@@ -19,27 +19,53 @@ export class CreatePartyOrderDto {
   @IsUUID()
   outlet_id: string;
 
+  @IsOptional()
   @IsUUID()
-  customer_id: string;
+  customer_id?: string;
 
   @IsNotEmpty()
   @IsString()
-  customer_name: string;
+  client_name: string;
+
+  @IsOptional()
+  @IsString()
+  customer_name?: string;
+
+  @IsOptional()
+  @IsString()
+  client_phone?: string;
 
   @IsOptional()
   @IsString()
   customer_phone?: string;
 
   @IsNotEmpty()
+  @Type(() => Date)
   event_date: Date;
 
   @IsOptional()
   @IsString()
   event_type?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
+  @IsNumber()
+  number_of_items?: number;
+
+  @IsOptional()
+  @IsNumber()
+  total_amount?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreatePartyOrderItemDto)
-  items: CreatePartyOrderItemDto[];
+  items?: CreatePartyOrderItemDto[];
 }

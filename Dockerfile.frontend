@@ -93,6 +93,13 @@ server {
   gzip_comp_level 6;
   gzip_min_length 1000;
 
+  # ========= SECURITY HEADERS =========
+  # Content Security Policy - allow necessary sources for frontend functionality
+  add_header Content-Security-Policy "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' http: https: ws: wss:;" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header X-Frame-Options "SAMEORIGIN" always;
+  add_header X-XSS-Protection "1; mode=block" always;
+
   # ========= STATIC FILES CACHING =========
   # Cache built assets (CSS/JS with content hash) for 1 year
   # These files have unique names due to Vite's content hashing

@@ -17,8 +17,8 @@ export class PartyOrder {
   @Column({ type: 'uuid' })
   outlet_id: string;
 
-  @Column({ type: 'uuid' })
-  customer_id: string;
+  @Column({ type: 'uuid', nullable: true })
+  customer_id?: string;
 
   @Column({ type: 'varchar' })
   customer_name: string;

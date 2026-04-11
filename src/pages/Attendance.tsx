@@ -69,14 +69,14 @@ const Attendance = () => {
     });
   };
 
-  const staffList = attendance?.map((record: any) => ({
+  const staffList = Array.isArray(attendance) ? attendance.map((record: any) => ({
     name: record.staff_name,
     role: record.role,
     status: record.status === "checked_in" ? "present" : record.status === "late_check_in" ? "late" : "absent",
     inTime: record.check_in_time ? record.check_in_time.substring(11, 16) : "--",
     outTime: record.check_out_time ? record.check_out_time.substring(11, 16) : "--",
     staffId: record.staff_id,
-  })) || [];
+  })) : [];
 
   const monthlyData = [
     { week: "Week 1", attendance: 92, late: 5 },

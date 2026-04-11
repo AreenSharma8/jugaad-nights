@@ -190,6 +190,14 @@ class ApiClient {
     });
   }
 
+  async createPurchaseOrder(orderData: any) {
+    return this.client.post<ApiResponse>("/purchase-orders", orderData);
+  }
+
+  async updatePurchaseOrderStatus(id: string, status: string) {
+    return this.client.patch<ApiResponse>(`/purchase-orders/${id}/status`, { status });
+  }
+
   async approvePurchaseOrder(id: string) {
     return this.client.patch<ApiResponse>(`/purchase-orders/${id}/approve`, {});
   }
@@ -199,8 +207,30 @@ class ApiClient {
   }
 
   // Festivals endpoints
-  async getFestivals(outlet_id?: string) {
-    return this.client.get<ApiResponse>("/festivals", {
+  async getFestivals(outlet_id: string) {
+    return this.client.get<ApiResponse>("/analytics/festivals", {
+      params: { outlet_id },
+    });
+  }
+
+  async getFestivalById(id: string) {
+    return this.client.get<ApiResponse>(`/analytics/festivals/${id}`);
+  }
+
+  async createFestival(festivalData: any) {
+    return this.client.post<ApiResponse>("/analytics/festivals", festivalData);
+  }
+
+  async updateFestival(id: string, festivalData: any) {
+    return this.client.patch<ApiResponse>(`/analytics/festivals/${id}`, festivalData);
+  }
+
+  async deleteFestival(id: string) {
+    return this.client.delete<ApiResponse>(`/analytics/festivals/${id}`);
+  }
+
+  async getFestivalMetrics(festivalId: string, outlet_id: string) {
+    return this.client.get<ApiResponse>(`/analytics/festivals/${festivalId}/metrics`, {
       params: { outlet_id },
     });
   }

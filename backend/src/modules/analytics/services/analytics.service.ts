@@ -1,5 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { RedisService } from '../../../services/redis.service';
+import { Festival } from '../entities';
+import { CreateFestivalDto, UpdateFestivalDto } from '../dto';
+import { FestivalRepository } from '../repositories';
 
 export interface DashboardMetrics {
   outlet_id: string;
@@ -47,8 +51,14 @@ export interface SalesTrend {
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
   private readonly CACHE_TTL = 5 * 60; // 5 minutes
+  private readonly festivalRepository: FestivalRepository;
 
-  constructor(private redisService: RedisService) {}
+  constructor(
+    private redisService: RedisService,
+    private dataSource: DataSource,
+  ) {
+    this.festivalRepository = new FestivalRepository(dataSource);
+  }
 
   async getDashboardMetrics(outlet_id: string, forceRefresh: boolean = false): Promise<DashboardMetrics> {
     const cacheKey = `dashboard:${outlet_id}:${new Date().toISOString().split('T')[0]}`;
@@ -256,5 +266,92 @@ export class AnalyticsService {
   async clearAllAnalyticsCaches(): Promise<void> {
     // TODO: Implement cache invalidation strategy
     this.logger.log('All analytics caches cleared');
+  }
+
+  // ========== FESTIVAL METHODS ==========
+
+  async createFestival(
+    createFestivalDto: CreateFestivalDto,
+    created_by: string,
+  ): Promise<Festival> {
+    const festival = this.festivalRepository.create({
+      ...createFestivalDto,
+      expected_sales: createFestivalDto.expected_sales || 0,
+      budget: createFestivalDto.budget || 0,
+      actual_sales: 0,
+      actual_expenses: 0,
+      status: createFestivalDto.status || 'planning',
+      created_by,
+      updated_by: created_by,
+    });
+
+    const savedFestival = await this.festivalRepository.save(festival);
+    this.logger.log(`Festival created: ${savedFestival.id}`);
+    return savedFestival;
+  }
+
+  async getFestivalsByOutlet(outlet_id: string): Promise<Festival[]> {
+    const festivals = await this.festivalRepository.findByOutlet(outlet_id);
+    this.logger.log(`Retrieved ${festivals.length} festivals for outlet: ${outlet_id}`);
+    return festivals;
+  }
+
+  async getFestivalById(id: string): Promise<Festival> {
+    const festival = await this.festivalRepository.findById(id);
+    if (!festival) {
+      throw new NotFoundException(`Festival with ID ${id} not found`);
+    }
+    return festival;
+  }
+
+  async updateFestival(
+    id: string,
+    updateFestivalDto: UpdateFestivalDto,
+    updated_by: string,
+  ): Promise<Festival> {
+    const festival = await this.getFestivalById(id);
+
+    Object.assign(festival, {
+      ...updateFestivalDto,
+      updated_by,
+    });
+
+    const updatedFestival = await this.festivalRepository.save(festival);
+    this.logger.log(`Festival updated: ${id}`);
+    return updatedFestival;
+  }
+
+  async deleteFestival(id: string): Promise<void> {
+    const festival = await this.getFestivalById(id);
+    await this.festivalRepository.deleteFestival(id);
+    this.logger.log(`Festival deleted: ${id}`);
+  }
+
+  async getFestivalMetrics(id: string, outlet_id: string): Promise<{
+    expected_sales: number;
+    actual_sales: number;
+    budget: number;
+    actual_expenses: number;
+    roi: number;
+    profit_loss: number;
+    revenue_variance: number;
+    budget_variance: number;
+    status: string;
+  }> {
+    const festival = await this.festivalRepository.getFestivalMetrics(outlet_id, id);
+    if (!festival) {
+      throw new NotFoundException(`Festival with ID ${id} not found`);
+    }
+
+    const profit_loss = festival.actual_sales - festival.actual_expenses;
+    const revenue_variance = ((festival.actual_sales - festival.expected_sales) / festival.expected_sales) * 100;
+    const budget_variance = ((festival.budget - festival.actual_expenses) / festival.budget) * 100;
+
+    return {
+      ...festival,
+      profit_loss: parseFloat(profit_loss.toFixed(2)),
+      revenue_variance: parseFloat(revenue_variance.toFixed(2)),
+      budget_variance: parseFloat(budget_variance.toFixed(2)),
+    };
   }
 }
